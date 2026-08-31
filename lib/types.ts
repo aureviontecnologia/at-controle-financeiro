@@ -43,6 +43,12 @@ export type CreditCard = {
   usedCents: number;
   closingDay: number;
   dueDay: number;
+  invoices?: Array<{
+    id: string;
+    dueDate: string;
+    amountCents: number;
+    status: 'open' | 'partially_paid' | 'paid' | 'overdue';
+  }>;
 };
 
 export type TransactionKind =

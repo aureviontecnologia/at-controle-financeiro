@@ -131,6 +131,12 @@ export async function fetchFinanceSnapshot(userId: string): Promise<FinanceSnaps
 
   const statements = assertData(statementsResult.data, statementsResult.error) as Array<Record<string, any>>;
   const usedByCard = statements.reduce((map, item) => map.set(item.card_id, (map.get(item.card_id) ?? 0) + Number(item.remaining_cents)), new Map<string, number>());
+  const invoicesByCard = statements.reduce((map, item) => {
+    const invoices = map.get(item.card_id) ?? ([] as NonNullable<CreditCard['invoices']>);
+    invoices.push({ id: item.id, dueDate: `${item.due_date}T12:00:00-03:00`, amountCents: Number(item.remaining_cents), status: item.status });
+    map.set(item.card_id, invoices);
+    return map;
+  }, new Map<string, NonNullable<CreditCard['invoices']>>());
   const rawSavings = assertData(savingsResult.data, savingsResult.error) as Array<Record<string, any>>;
   const reservedByAccount = rawSavings.reduce((map, item) => map.set(item.account_id, (map.get(item.account_id) ?? 0) + Number(item.balance_cents)), new Map<string, number>());
   const accounts: Account[] = (assertData(accountsResult.data, accountsResult.error) as Array<Record<string, any>>).map((item) => ({
@@ -152,6 +158,7 @@ export async function fetchFinanceSnapshot(userId: string): Promise<FinanceSnaps
     usedCents: usedByCard.get(item.id) ?? 0,
     closingDay: item.closing_day,
     dueDay: item.due_day,
+    invoices: (invoicesByCard.get(item.id) ?? []).sort((a: NonNullable<CreditCard['invoices']>[number], b: NonNullable<CreditCard['invoices']>[number]) => a.dueDate.localeCompare(b.dueDate)),
   }));
   const upcoming: UpcomingExpense[] = (assertData(upcomingResult.data, upcomingResult.error) as Array<Record<string, any>>).map((item) => ({
     id: item.id,
@@ -223,7 +230,7 @@ export async function createOnlineScheduledExpense(input: { householdId: string;
   return data.id as string;
 }
 
-export async function payOnlineScheduledExpense(input: { householdId: string; scheduleId: string; sourceId: string; sourceKind: 'account' | 'card'; paymentMethod: PaymentMethodId; paymentMethodDetail?: string; idempotencyKey: string }) {
+export async function payOnlineScheduledExpense(input: { householdId: string; scheduleId: string; sourceId: string; sourceKind: 'account' | 'card'; paymentMethod: PaymentMethodId; paymentMethodDetail?: string; amountCents: number; description: string; idempotencyKey: string }) {
   if (!supabase) throw new Error('Supabase não configurado.');
   const { data, error } = await supabase.rpc('pay_scheduled_expense', {
     target_household: input.householdId,
@@ -239,6 +246,7 @@ export async function payOnlineScheduledExpense(input: { householdId: string; sc
     if (error?.message.includes('insufficient')) throw new Error(input.sourceKind === 'card' ? 'Limite insuficiente no cartão.' : 'Saldo livre insuficiente na conta.');
     throw new Error('Não foi possível confirmar o pagamento.');
   }
+  await notifyPartnerActivity(input.householdId, { type: 'expense', amountCents: input.amountCents, description: input.description.trim() });
   return data as string;
 }
 
@@ -249,13 +257,15 @@ export async function createOnlineSavingsPot(input: { householdId: string; accou
     if (error?.message.includes('insufficient')) throw new Error('O valor guardado é maior que o saldo livre da conta.');
     throw new Error('Não foi possível criar o cofre.');
   }
+  await notifyPartnerActivity(input.householdId, { type: 'other', amountCents: input.openingCents, description: `guardou em ${input.name.trim()}` });
   return data as string;
 }
 
-export async function adjustOnlineSavingsPot(input: { householdId: string; potId: string; amountDeltaCents: number }) {
+export async function adjustOnlineSavingsPot(input: { householdId: string; potId: string; potName: string; amountDeltaCents: number }) {
   if (!supabase) throw new Error('Supabase não configurado.');
   const { data, error } = await supabase.rpc('adjust_savings_pot', { target_household: input.householdId, target_pot: input.potId, amount_delta: input.amountDeltaCents });
   if (error || data == null) throw new Error(error?.message.includes('insufficient') ? 'Saldo insuficiente para esta alteração.' : 'Não foi possível atualizar o cofre.');
+  await notifyPartnerActivity(input.householdId, { type: 'other', amountCents: Math.abs(input.amountDeltaCents), description: `${input.amountDeltaCents > 0 ? 'guardou em' : 'retirou de'} ${input.potName}` });
   return Number(data);
 }
 
@@ -294,12 +304,22 @@ export async function createOnlineAccount(input: { householdId: string; userId: 
   return data.id as string;
 }
 
-export async function createOnlineCard(input: { householdId: string; userId: string; name: string; institution: string; lastFour?: string; limitCents: number; closingDay: number; dueDay: number }) {
+export async function createOnlineCard(input: { householdId: string; userId: string; name: string; institution: string; lastFour?: string; limitCents: number; currentInvoiceCents: number; futureInvoices: Array<{ month: string; amountCents: number }>; closingDay: number; dueDay: number }) {
   if (!supabase) throw new Error('Supabase não configurado.');
-  const { data, error } = await supabase.from('credit_cards').insert({ household_id: input.householdId, owner_id: input.userId, created_by: input.userId, name: input.name.trim(), institution: input.institution.trim(), last_four: input.lastFour || null, limit_cents: input.limitCents, closing_day: input.closingDay, due_day: input.dueDay }).select('id').single();
-  if (error) throw new Error('Não foi possível adicionar o cartão. Confira limite e datas.');
+  const { data, error } = await supabase.rpc('create_credit_card_with_current_invoice', {
+    target_household: input.householdId,
+    card_name: input.name.trim(),
+    card_institution: input.institution.trim(),
+    card_last_four: input.lastFour || null,
+    card_limit: input.limitCents,
+    card_closing_day: input.closingDay,
+    card_due_day: input.dueDay,
+    current_invoice: input.currentInvoiceCents,
+    future_invoices: input.futureInvoices,
+  });
+  if (error || !data) throw new Error('Não foi possível adicionar o cartão. Confira limite, fatura e datas.');
   await notifyPartnerActivity(input.householdId, { type: 'card', amountCents: input.limitCents, description: input.name.trim() });
-  return data.id as string;
+  return data as string;
 }
 
 export async function touchOnlinePresence(userId: string) {

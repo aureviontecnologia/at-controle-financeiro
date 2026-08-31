@@ -14,14 +14,16 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useFinanceStore } from '@/store/useFinanceStore';
 
 export default function AccountDetailsScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id } = useLocalSearchParams<{ id?: string }>();
   const { user } = useAuth();
   const { palette } = useAppTheme();
   const finance = useFinanceData();
   const addLocalPot = useFinanceStore((state) => state.addSavingsPot);
   const adjustLocalPot = useFinanceStore((state) => state.adjustSavingsPot);
-  const account = finance.accounts.find((item) => item.id === id);
-  const pots = finance.savingsPots.filter((item) => item.accountId === id);
+  const [selectedAccountId, setSelectedAccountId] = useState('');
+  const effectiveAccountId = finance.accounts.some((item) => item.id === id) ? id : selectedAccountId || finance.accounts[0]?.id;
+  const account = finance.accounts.find((item) => item.id === effectiveAccountId);
+  const pots = finance.savingsPots.filter((item) => item.accountId === effectiveAccountId);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [openingCents, setOpeningCents] = useState(0);
@@ -30,7 +32,7 @@ export default function AccountDetailsScreen() {
   const [adjustmentCents, setAdjustmentCents] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  if (!account) return <Screen><Header /><EmptyState title="Conta não encontrada" description="Atualize os dados e tente novamente." /></Screen>;
+  if (!account) return <Screen><Header title="Cofres e caixinhas" /><EmptyState title="Crie uma conta primeiro" description="Os cofres ficam dentro de uma conta, mas o valor guardado aparece separado do saldo livre." /></Screen>;
 
   async function refreshAfter(action: () => Promise<unknown> | unknown) {
     setSaving(true);
@@ -62,14 +64,15 @@ export default function AccountDetailsScreen() {
       if (user?.demo) adjustLocalPot(pot.id, delta);
       else {
         if (!finance.householdId) throw new Error('A família ainda não sincronizou.');
-        await adjustOnlineSavingsPot({ householdId: finance.householdId, potId: pot.id, amountDeltaCents: delta });
+        await adjustOnlineSavingsPot({ householdId: finance.householdId, potId: pot.id, potName: pot.name, amountDeltaCents: delta });
       }
       setAdjustmentCents(0);
     });
   }
 
   return <KeyboardAvoidingView style={[styles.flex, { backgroundColor: palette.ink }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><Screen>
-    <Header />
+    <Header title={id ? 'Detalhes da conta' : 'Cofres e caixinhas'} />
+    {!id && finance.accounts.length > 1 ? <View style={styles.field}><AppText variant="label">CONTA ONDE O DINHEIRO ESTÁ</AppText><View style={styles.accountOptions}>{finance.accounts.map((item) => <Pressable key={item.id} onPress={() => { setSelectedAccountId(item.id); setSelectedPotId(''); }} style={[styles.accountOption, { backgroundColor: palette.surface, borderColor: item.id === effectiveAccountId ? palette.mint : palette.lineSoft }]}><View style={styles.copy}><AppText variant="body">{item.name}</AppText><AppText variant="caption">{formatMoney(accountSpendableCents(item))} livres · {formatMoney(item.reservedCents ?? 0)} guardados</AppText></View>{item.id === effectiveAccountId ? <View style={[styles.selectedDot, { backgroundColor: palette.mint }]} /> : null}</Pressable>)}</View></View> : null}
     <View style={styles.heading}><AppText variant="title">{account.name}</AppText><AppText variant="bodyMuted">{account.institution} · {account.ownerId === 'alberto' ? 'Alberto' : 'Thauane'}</AppText></View>
     <Surface style={styles.balance}><View><AppText variant="caption">SALDO LIVRE</AppText><AppText variant="display">{formatMoney(accountSpendableCents(account))}</AppText></View><View><AppText variant="caption">GUARDADO</AppText><AppText variant="mono">{formatMoney(account.reservedCents ?? 0)}</AppText></View><View><AppText variant="caption">TOTAL NO BANCO</AppText><AppText variant="mono">{formatMoney(account.balanceCents)}</AppText></View></Surface>
     <View style={styles.sectionHeading}><View><AppText variant="section">Cofres e caixinhas</AppText><AppText variant="caption">O valor fica separado e não pode ser gasto por engano.</AppText></View><Pressable accessibilityLabel="Criar cofre" onPress={() => setAdding((value) => !value)} style={[styles.iconButton, { backgroundColor: palette.mint }]}><Plus size={20} color={palette.ink} /></Pressable></View>
@@ -79,8 +82,8 @@ export default function AccountDetailsScreen() {
   </Screen></KeyboardAvoidingView>;
 }
 
-function Header() { const { palette } = useAppTheme(); return <View style={styles.header}><Pressable accessibilityLabel="Fechar" onPress={() => router.back()} style={[styles.close, { backgroundColor: palette.surface }]}><X size={20} color={palette.text} /></Pressable><AppText variant="section">Detalhes da conta</AppText><View style={styles.close} /></View>; }
+function Header({ title }: { title: string }) { const { palette } = useAppTheme(); return <View style={styles.header}><Pressable accessibilityLabel="Fechar" onPress={() => router.back()} style={[styles.close, { backgroundColor: palette.surface }]}><X size={20} color={palette.text} /></Pressable><AppText variant="section">{title}</AppText><View style={styles.close} /></View>; }
 function Field({ label, value, onChangeText, placeholder }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string }) { const { palette } = useAppTheme(); return <View style={styles.field}><AppText variant="label">{label}</AppText><TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={palette.textDim} selectionColor={palette.mint} style={[styles.input, { backgroundColor: palette.surfaceRaised, color: palette.text }]} /></View>; }
 function MoneyField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) { const { palette } = useAppTheme(); return <View style={styles.field}><AppText variant="label">{label}</AppText><TextInput keyboardType="number-pad" value={formatCentsInput(value)} onChangeText={(text) => onChange(parseBrlToCents(text))} selectionColor={palette.mint} style={[styles.input, { backgroundColor: palette.surfaceRaised, color: palette.text }]} /></View>; }
 
-const styles = StyleSheet.create({ flex: { flex: 1 }, header: { paddingTop: spacing.md, minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, close: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, heading: { gap: spacing.xs }, balance: { gap: spacing.md, flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap' }, sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.lg }, iconButton: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, form: { gap: spacing.md }, field: { gap: spacing.sm }, input: { minHeight: 52, borderRadius: radii.md, paddingHorizontal: spacing.lg, fontFamily: type.regular, fontSize: 16 }, list: { paddingVertical: spacing.xs }, potRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.sm, borderRadius: radii.md }, potIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }, copy: { flex: 1, gap: 2 }, adjustActions: { flexDirection: 'row', gap: spacing.sm }, adjustButton: { flex: 1, minHeight: 48, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: spacing.sm } });
+const styles = StyleSheet.create({ flex: { flex: 1 }, header: { paddingTop: spacing.md, minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, close: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, heading: { gap: spacing.xs }, balance: { gap: spacing.md, flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap' }, sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.lg }, iconButton: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, form: { gap: spacing.md }, field: { gap: spacing.sm }, accountOptions: { gap: spacing.sm }, accountOption: { minHeight: 64, borderRadius: radii.md, borderWidth: 1, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.md }, selectedDot: { width: 10, height: 10, borderRadius: 5 }, input: { minHeight: 52, borderRadius: radii.md, paddingHorizontal: spacing.lg, fontFamily: type.regular, fontSize: 16 }, list: { paddingVertical: spacing.xs }, potRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.sm, borderRadius: radii.md }, potIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }, copy: { flex: 1, gap: 2 }, adjustActions: { flexDirection: 'row', gap: spacing.sm }, adjustButton: { flex: 1, minHeight: 48, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: spacing.sm } });

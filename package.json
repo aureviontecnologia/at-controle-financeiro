@@ -1,7 +1,7 @@
 {
   "name": "aurevion",
   "main": "expo-router/entry",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "dependencies": {
     "@block65/webcrypto-web-push": "^1.0.2",
     "@expo-google-fonts/figtree": "^0.4.1",

@@ -2,13 +2,14 @@ import { CalendarDays, CircleDollarSign, Target } from 'lucide-react-native';
 import { router, type Href } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { AppText, Divider, EmptyState, Pill, Screen, SectionHeader, Surface } from '@/components/ui';
+import { AppText, Divider, EmptyState, Pill, PrimaryButton, Screen, SectionHeader, Surface } from '@/components/ui';
 import { colors, radii, spacing } from '@/constants/theme';
 import { budgetProgress, liquidPosition, monthlyGoalDeadline, monthlyGoalProgress, projectedAvailable } from '@/lib/finance';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useFinanceData } from '@/hooks/useFinanceData';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { useAppTheme } from '@/providers/ThemeProvider';
+import { paymentMethods } from '@/lib/payment';
 
 export default function PlanningScreen() {
   const { accounts, cards, upcoming, budgets, debts, monthlyGoal } = useFinanceData();
@@ -54,9 +55,10 @@ export default function PlanningScreen() {
       </View>
 
       <View style={styles.section}>
-        <SectionHeader title="Contas e assinaturas" action="ADICIONAR" onAction={() => router.push('/scheduled-expense' as Href)} />
+        <SectionHeader title="Contas e assinaturas" />
+        <PrimaryButton label="Adicionar conta ou assinatura" onPress={() => router.push('/scheduled-expense' as Href)} />
         <Surface style={styles.stack}>
-          {upcoming.length ? upcoming.map((item, index) => <View key={item.id}>{index ? <Divider /> : null}<Pressable accessibilityRole="button" onPress={() => router.push(`/scheduled-expense?id=${encodeURIComponent(item.id)}` as Href)} style={({ pressed }) => [styles.itemRow, pressed && styles.pressed]}><View style={[styles.itemIcon, { backgroundColor: palette.skyDeep }]}><CalendarDays size={18} color={palette.sky} /></View><View style={styles.itemCopy}><AppText variant="body">{item.title}</AppText><AppText variant="caption">{item.recurrence === 'monthly' ? 'mensal · ' : ''}vence {formatDate(item.dueDate)}{item.lastPaidAt ? ` · última paga ${formatDate(item.lastPaidAt)}` : ''}</AppText></View><AppText variant="mono" style={styles.smallMoney}>{formatMoney(item.amountCents, hideValues)}</AppText></Pressable></View>) : <EmptyState title="Nenhuma conta prevista" description="Adicione contas únicas ou assinaturas mensais e confirme o pagamento por conta, dinheiro ou cartão." />}
+          {upcoming.length ? upcoming.map((item, index) => { const methodName = paymentMethods.find((method) => method.id === item.paymentMethod)?.name ?? item.paymentMethodDetail; return <View key={item.id}>{index ? <Divider /> : null}<Pressable accessibilityRole="button" accessibilityLabel={`${item.title}, ${item.paid ? 'paga' : 'pendente'}`} onPress={() => router.push(`/scheduled-expense?id=${encodeURIComponent(item.id)}` as Href)} style={({ pressed }) => [styles.itemRow, pressed && styles.pressed]}><View style={[styles.itemIcon, { backgroundColor: item.paid ? palette.mintDeep : palette.skyDeep }]}><CalendarDays size={18} color={item.paid ? palette.mint : palette.sky} /></View><View style={styles.itemCopy}><AppText variant="body">{item.title}</AppText><AppText variant="caption">{item.recurrence === 'monthly' ? 'assinatura mensal · ' : 'conta única · '}vence {formatDate(item.dueDate)}</AppText>{item.lastPaidAt ? <AppText variant="caption">última paga {formatDate(item.lastPaidAt)}{methodName ? ` · ${methodName}` : ''}</AppText> : null}</View><View style={styles.itemRight}><Pill tone={item.paid ? 'mint' : 'amber'}>{item.paid ? 'PAGA' : 'PENDENTE'}</Pill><AppText variant="mono" style={styles.smallMoney}>{formatMoney(item.amountCents, hideValues)}</AppText></View></Pressable></View>; }) : <EmptyState title="Nenhuma conta prevista" description="Adicione contas únicas ou assinaturas mensais e confirme o pagamento por conta, dinheiro ou cartão." />}
         </Surface>
       </View>
 
@@ -83,6 +85,7 @@ const styles = StyleSheet.create({
   itemRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   itemIcon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   itemCopy: { flex: 1, gap: 2 },
+  itemRight: { alignItems: 'flex-end', gap: spacing.sm },
   smallMoney: { fontSize: 12 },
   pressed: { opacity: 0.62 },
 });

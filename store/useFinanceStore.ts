@@ -82,7 +82,7 @@ type FinanceState = {
   setMonthlyGoal: (goal: MonthlyGoal) => void;
   addExpense: (expense: AddExpense) => { created: boolean };
   addAccount: (account: Omit<Account, 'id' | 'active'>) => Account;
-  addCard: (card: Omit<CreditCard, 'id' | 'usedCents'>) => CreditCard;
+  addCard: (card: Omit<CreditCard, 'id'>) => CreditCard;
   addScheduledExpense: (expense: Omit<UpcomingExpense, 'id' | 'paid'>) => UpcomingExpense;
   markScheduledPaid: (id: string) => void;
   addSavingsPot: (pot: Omit<SavingsPot, 'id' | 'updatedAt'>) => SavingsPot;
@@ -149,7 +149,7 @@ export const useFinanceStore = create<FinanceState>()(
         return account;
       },
       addCard: (input) => {
-        const card: CreditCard = { ...input, id: `local-card-${Date.now()}`, usedCents: 0 };
+        const card: CreditCard = { ...input, id: `local-card-${Date.now()}` };
         set((state) => ({ cards: [...state.cards, card] }));
         return card;
       },

@@ -88,6 +88,15 @@ describe('invariantes do household', () => {
     expect(availableCardLimit([{ ...cards[0], usedCents: 120000 }])).toBe(0);
   });
 
+  it('desconta fatura atual e faturas futuras do limite total do cartão', () => {
+    const currentInvoice = 42_00;
+    const futureInvoices = [31_00, 17_00, 10_00];
+    const usedCents = currentInvoice + futureInvoices.reduce((sum, value) => sum + value, 0);
+    const cards: CreditCard[] = [{ id: 'future', ownerId: 'alberto', name: 'Cartão', limitCents: 150_00, usedCents, closingDay: 25, dueDay: 3 }];
+    expect(usedCents).toBe(100_00);
+    expect(availableCardLimit(cards)).toBe(50_00);
+  });
+
   it('calcula dívida externa sem criar saldo devedor interno', () => {
     expect(debtOutstanding(100000, [25000, 30000])).toBe(45000);
     expect(debtOutstanding(100000, [120000])).toBe(0);

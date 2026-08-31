@@ -23,9 +23,13 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let active = true;
     if (!canUseStrawberry) return () => { active = false; };
-    void AsyncStorage.getItem(THAUANE_THEME_KEY).then((saved) => {
-      if (active) setPreference(saved === null ? true : saved === 'true');
-    });
+    void AsyncStorage.getItem(THAUANE_THEME_KEY)
+      .then((saved) => {
+        if (active) setPreference(saved === null ? true : saved === 'true');
+      })
+      .catch(() => {
+        if (active) setPreference(true);
+      });
     return () => { active = false; };
   }, [canUseStrawberry]);
 

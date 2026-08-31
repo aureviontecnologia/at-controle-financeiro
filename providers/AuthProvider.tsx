@@ -77,6 +77,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
           const saved = await readDemoUser();
           if (active && saved) setUser(JSON.parse(saved) as AuthUser);
         }
+      } catch {
+        // Uma falha de rede/armazenamento não pode derrubar o processo do app.
+        if (active) setUser(null);
       } finally {
         if (active) setLoading(false);
       }
@@ -100,8 +103,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const refreshToken = params.get('refresh_token');
       if (accessToken && refreshToken) await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
     }
-    void Linking.getInitialURL().then((url) => { if (url) void handleAuthUrl(url); });
-    const linkingSubscription = Linking.addEventListener('url', ({ url }) => { void handleAuthUrl(url); });
+    void Linking.getInitialURL()
+      .then((url) => (url ? handleAuthUrl(url) : undefined))
+      .catch(() => undefined);
+    const linkingSubscription = Linking.addEventListener('url', ({ url }) => {
+      void handleAuthUrl(url).catch(() => undefined);
+    });
     return () => {
       active = false;
       subscription?.unsubscribe();
@@ -111,7 +118,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (!user || user.demo || !supabase) return;
-    const touch = () => void touchOnlinePresence(user.id);
+    const touch = () => { void touchOnlinePresence(user.id).catch(() => undefined); };
     touch();
     const timer = setInterval(touch, 60_000);
     const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') touch(); });

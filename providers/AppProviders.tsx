@@ -8,7 +8,11 @@ import { ThemeProvider } from './ThemeProvider';
 import { UpdateProvider } from './UpdateProvider';
 
 export function AppProviders({ children }: PropsWithChildren) {
-  useEffect(() => { configureSharedNotificationHandler(); }, []);
+  useEffect(() => {
+    // Alguns aparelhos inicializam o serviço do Google depois do React Native.
+    // A configuração de push é opcional e nunca deve encerrar o app.
+    try { configureSharedNotificationHandler(); } catch { /* aguarda nova tentativa ao ativar notificações */ }
+  }, []);
   const [queryClient] = useState(
     () =>
       new QueryClient({

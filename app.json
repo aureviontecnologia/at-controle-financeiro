@@ -2,6 +2,7 @@
   "expo": {
     "name": "A&T Controle Financeiro",
     "slug": "aurevion",
+    "owner": "aurevion",
     "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -58,6 +59,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "83e26dff-133c-45a2-ad8c-982b67c650bb"
+      }
     }
   }
 }

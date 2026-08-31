@@ -33,7 +33,13 @@ export default function MoreScreen() {
   const [notificationBusy, setNotificationBusy] = useState(false);
   const notifications = local.notificationsEnabled && finance.notificationsEnabled && notificationPermission === 'granted';
 
-  useEffect(() => { void getSharedNotificationPermission().then(setNotificationPermission); }, []);
+  useEffect(() => {
+    let active = true;
+    void getSharedNotificationPermission()
+      .then((permission) => { if (active) setNotificationPermission(permission); })
+      .catch(() => { if (active) setNotificationPermission('unavailable'); });
+    return () => { active = false; };
+  }, []);
 
   async function setNotifications(enabled: boolean) {
     if (notificationBusy) return;

@@ -1,0 +1,47 @@
+name: Sync A&T v1.0.6
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/sync-v1.0.6.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore the validated v1.0.6 tree
+        shell: bash
+        run: |
+          git fetch .github/workflows/sync-v1.0.6.bundle refs/heads/main:refs/remotes/local/v1.0.6
+          git checkout refs/remotes/local/v1.0.6 -- .
+          rm -f .github/workflows/sync-v1.0.6.yml .github/workflows/sync-v1.0.6.bundle
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: npm
+
+      - name: Validate
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+
+      - name: Publish source and release tag
+        shell: bash
+        run: |
+          git config user.name "Aurevion Release"
+          git config user.email "aurevion@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add card invoice schedule and visible savings"
+          git tag -a v1.0.6 -m "A&T Controle Financeiro v1.0.6"
+          git push origin HEAD:main
+          git push origin v1.0.6

@@ -1,12 +1,16 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { createContext, createElement, useContext, useEffect, type PropsWithChildren } from 'react';
 
 import { fetchFinanceSnapshot, FinanceDataError, type FinanceSnapshot } from '@/lib/financialRepository';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { useFinanceStore } from '@/store/useFinanceStore';
 
-export function useFinanceData() {
+type FinanceDataValue = ReturnType<typeof useFinanceDataSource>;
+
+const FinanceDataContext = createContext<FinanceDataValue | null>(null);
+
+function useFinanceDataSource() {
   const { user } = useAuth();
   const local = useFinanceStore();
   const queryClient = useQueryClient();
@@ -21,15 +25,26 @@ export function useFinanceData() {
   useEffect(() => {
     const client = supabase;
     if (!client || !householdId) return;
-    const channel = client
-      .channel(`household:${householdId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `household_id=eq.${householdId}` }, () => void queryClient.invalidateQueries({ queryKey: ['finance', user?.id] }))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'card_statements', filter: `household_id=eq.${householdId}` }, () => void queryClient.invalidateQueries({ queryKey: ['finance', user?.id] }))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'scheduled_expenses', filter: `household_id=eq.${householdId}` }, () => void queryClient.invalidateQueries({ queryKey: ['finance', user?.id] }))
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user?.id}` }, () => void queryClient.invalidateQueries({ queryKey: ['finance', user?.id] }))
-      .subscribe();
-    return () => { void client.removeChannel(channel); };
-  }, [householdId, notificationsEnabled, queryClient, user?.id]);
+    let channel: ReturnType<typeof client.channel> | null = null;
+    try {
+      const refreshSnapshot = () => {
+        void queryClient.invalidateQueries({ queryKey: ['finance', user?.id] }).catch(() => undefined);
+      };
+      channel = client
+        .channel(`household:${householdId}:${user?.id ?? 'unknown'}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `household_id=eq.${householdId}` }, refreshSnapshot)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'card_statements', filter: `household_id=eq.${householdId}` }, refreshSnapshot)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'scheduled_expenses', filter: `household_id=eq.${householdId}` }, refreshSnapshot)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user?.id}` }, refreshSnapshot)
+        .subscribe();
+    } catch {
+      // A sincronização em tempo real é complementar. Uma falha de WebSocket
+      // nunca deve derrubar a navegação ou impedir a consulta HTTPS normal.
+    }
+    return () => {
+      if (channel) void client.removeChannel(channel).catch(() => undefined);
+    };
+  }, [householdId, queryClient, user?.id]);
 
   if (!user || user.demo) {
     const members = [
@@ -41,4 +56,15 @@ export function useFinanceData() {
 
   const empty: Omit<FinanceSnapshot, 'householdId'> = { accounts: [], cards: [], transactions: [], upcoming: [], budgets: [], debts: [], monthlyGoal: null, notificationsEnabled: true, members: [] };
   return { householdId: householdId ?? null, ...(remoteQuery.data ?? empty), isLoading: remoteQuery.isLoading, isRefreshing: remoteQuery.isRefetching, error: remoteQuery.error, errorKind: remoteQuery.error instanceof FinanceDataError ? remoteQuery.error.kind : remoteQuery.error ? 'server' as const : null, refresh: remoteQuery.refetch };
+}
+
+export function FinanceDataProvider({ children }: PropsWithChildren) {
+  const value = useFinanceDataSource();
+  return createElement(FinanceDataContext.Provider, { value }, children);
+}
+
+export function useFinanceData() {
+  const value = useContext(FinanceDataContext);
+  if (!value) throw new Error('useFinanceData precisa estar dentro de FinanceDataProvider.');
+  return value;
 }

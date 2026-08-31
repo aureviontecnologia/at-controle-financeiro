@@ -71,7 +71,9 @@ jobs:
         run: |
           set -euo pipefail
           RELEASE_VERSION="${GITHUB_REF_NAME#v}"
-          node scripts/set-release-version.mjs "$RELEASE_VERSION" "$GITHUB_RUN_NUMBER"
+          IFS='.' read -r VERSION_MAJOR VERSION_MINOR VERSION_PATCH <<< "$RELEASE_VERSION"
+          VERSION_CODE=$((10#$VERSION_MAJOR * 1000000 + 10#$VERSION_MINOR * 1000 + 10#$VERSION_PATCH))
+          node scripts/set-release-version.mjs "$RELEASE_VERSION" "$VERSION_CODE"
           echo "RELEASE_VERSION=$RELEASE_VERSION" >> "$GITHUB_ENV"
 
       - name: Gerar projeto Android

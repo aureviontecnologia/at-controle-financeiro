@@ -1,0 +1,117 @@
+name: Publicar APK Android
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_EXPO_PROJECT_ID: ${{ secrets.EXPO_PUBLIC_EXPO_PROJECT_ID }}
+      AUREVION_RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/at-finance-release.p12
+      AUREVION_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      AUREVION_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      AUREVION_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Validar secrets necessários
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$AUREVION_RELEASE_KEYSTORE_PASSWORD"
+          test -n "$AUREVION_RELEASE_KEY_ALIAS"
+          test -n "$AUREVION_RELEASE_KEY_PASSWORD"
+          test -n "$EXPO_PUBLIC_SUPABASE_URL"
+          test -n "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
+          test -n "$EXPO_PUBLIC_EXPO_PROJECT_ID"
+          test -n "$GOOGLE_SERVICES_JSON_BASE64"
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$AUREVION_RELEASE_KEYSTORE_PATH"
+          printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > google-services.json
+
+      - name: Instalar e testar
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+
+      - name: Preparar versão
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE_VERSION="${GITHUB_REF_NAME#v}"
+          node scripts/set-release-version.mjs "$RELEASE_VERSION" "$GITHUB_RUN_NUMBER"
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> "$GITHUB_ENV"
+
+      - name: Gerar projeto Android
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Compilar APK ARM64 assinado
+        working-directory: android
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+
+      - name: Preparar artefatos
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_NAME="AT-Controle-Financeiro-v${RELEASE_VERSION}-arm64.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/$APK_NAME"
+          cd "$RUNNER_TEMP"
+          sha256sum "$APK_NAME" > "$APK_NAME.sha256"
+          echo "APK_PATH=$RUNNER_TEMP/$APK_NAME" >> "$GITHUB_ENV"
+          echo "CHECKSUM_PATH=$RUNNER_TEMP/$APK_NAME.sha256" >> "$GITHUB_ENV"
+
+      - name: Publicar GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="v${RELEASE_VERSION}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK_PATH" "$CHECKSUM_PATH" --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --latest --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" "$APK_PATH" "$CHECKSUM_PATH" \
+              --title "A&T Controle Financeiro ${RELEASE_VERSION}" \
+              --generate-notes --latest --repo "$GITHUB_REPOSITORY"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AT-Controle-Financeiro-v${{ env.RELEASE_VERSION }}-arm64
+          path: |
+            ${{ env.APK_PATH }}
+            ${{ env.CHECKSUM_PATH }}
+          if-no-files-found: error
+          retention-days: 14

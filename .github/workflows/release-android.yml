@@ -20,7 +20,6 @@ jobs:
       EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
       EXPO_PUBLIC_EXPO_PROJECT_ID: ${{ secrets.EXPO_PUBLIC_EXPO_PROJECT_ID }}
-      AUREVION_RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/at-finance-release.p12
       AUREVION_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       AUREVION_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       AUREVION_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -56,8 +55,10 @@ jobs:
           test -n "$EXPO_PUBLIC_EXPO_PROJECT_ID"
           test -n "$GOOGLE_SERVICES_JSON_BASE64"
           umask 077
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$AUREVION_RELEASE_KEYSTORE_PATH"
+          KEYSTORE_PATH="$RUNNER_TEMP/at-finance-release.p12"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
           printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > google-services.json
+          echo "AUREVION_RELEASE_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
 
       - name: Instalar e testar
         run: |

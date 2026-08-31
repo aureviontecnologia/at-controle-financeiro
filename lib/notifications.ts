@@ -16,16 +16,20 @@ export type PartnerActivity = { type: 'expense' | 'income' | 'transfer' | 'accou
 
 export function configureSharedNotificationHandler() {
   if (handlerConfigured || Platform.OS === 'web') return;
-  handlerConfigured = true;
-  const ExpoNotifications = nativeNotifications();
-  ExpoNotifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
+  try {
+    const ExpoNotifications = nativeNotifications();
+    ExpoNotifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+    handlerConfigured = true;
+  } catch {
+    // O restante do app funciona mesmo se o serviço nativo ainda estiver iniciando.
+  }
 }
 
 async function sessionToken() {
@@ -118,10 +122,14 @@ export async function getSharedNotificationPermission(): Promise<SharedNotificat
     if (typeof window === 'undefined' || !('Notification' in window) || !('PushManager' in window)) return 'unavailable';
     return window.Notification.permission === 'granted' ? 'granted' : window.Notification.permission === 'denied' ? 'denied' : 'prompt';
   }
-  configureSharedNotificationHandler();
-  const ExpoNotifications = nativeNotifications();
-  const permission = await ExpoNotifications.getPermissionsAsync();
-  return permission.granted ? 'granted' : permission.canAskAgain ? 'prompt' : 'denied';
+  try {
+    configureSharedNotificationHandler();
+    const ExpoNotifications = nativeNotifications();
+    const permission = await ExpoNotifications.getPermissionsAsync();
+    return permission.granted ? 'granted' : permission.canAskAgain ? 'prompt' : 'denied';
+  } catch {
+    return 'unavailable';
+  }
 }
 
 export async function notifyPartnerActivity(householdId: string, event: PartnerActivity) {

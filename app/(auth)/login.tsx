@@ -11,7 +11,9 @@ import { useAuth } from '@/providers/AuthProvider';
 
 const schema = z.object({
   email: z.string().email('Digite um email válido.'),
-  password: z.string().min(10, 'A senha precisa ter pelo menos 10 caracteres.'),
+  // O login deve aceitar senhas antigas válidas; a política de 10 caracteres
+  // continua sendo aplicada somente ao criar ou redefinir uma senha.
+  password: z.string().min(1, 'Digite sua senha.'),
 });
 
 export default function LoginScreen() {

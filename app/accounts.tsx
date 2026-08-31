@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { Banknote, Check, Landmark, Plus, WalletCards, X } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
@@ -9,6 +9,7 @@ import { colors, radii, spacing, type } from '@/constants/theme';
 import { useFinanceData } from '@/hooks/useFinanceData';
 import { createOnlineAccount } from '@/lib/financialRepository';
 import { formatCentsInput, formatMoney, parseBrlToCents } from '@/lib/format';
+import { accountSpendableCents, totalReserved, totalSpendable } from '@/lib/finance';
 import type { Account } from '@/lib/types';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
@@ -57,8 +58,8 @@ export default function AccountsScreen() {
       <Screen>
         <Header title="Contas" onClose={() => router.back()} />
         {!adding ? <>
-          <View style={styles.summary}><View><AppText variant="label">SALDO EM CONTAS</AppText><AppText variant="title">{formatMoney(finance.accounts.reduce((sum, item) => sum + item.balanceCents, 0))}</AppText></View><Pressable accessibilityRole="button" accessibilityLabel="Adicionar conta" onPress={() => setAdding(true)} style={[styles.add, { backgroundColor: palette.mint }]}><Plus size={22} color={palette.ink} /></Pressable></View>
-          <Surface style={styles.list}>{finance.accounts.length ? finance.accounts.map((item, index) => <View key={item.id}>{index ? <Divider /> : null}<Pressable accessibilityRole="button" accessibilityLabel={`Ver detalhes de ${item.name}`} onPress={() => Alert.alert(item.name, `${item.institution}\nResponsável: ${item.ownerId === 'alberto' ? 'Alberto' : 'Thauane'}\nSaldo atual: ${formatMoney(item.balanceCents)}`)} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}><View style={[styles.icon, { backgroundColor: item.type === 'cash' ? palette.amberDeep : palette.mintDeep }]}>{item.type === 'cash' ? <Banknote size={19} color={palette.amber} /> : item.type === 'wallet' ? <WalletCards size={19} color={palette.mint} /> : <Landmark size={19} color={palette.mint} />}</View><View style={styles.copy}><AppText variant="body">{item.name}</AppText><AppText variant="caption">{item.institution} · {item.ownerId === 'alberto' ? 'Alberto' : 'Thauane'}</AppText></View><AppText variant="mono" style={styles.money}>{formatMoney(item.balanceCents)}</AppText></Pressable></View>) : <EmptyState title="Nenhuma conta cadastrada" description="Adicione conta bancária, carteira digital ou dinheiro para começar a lançar gastos." />}</Surface>
+          <View style={styles.summary}><View><AppText variant="label">SALDO LIVRE EM CONTAS</AppText><AppText variant="title">{formatMoney(totalSpendable(finance.accounts))}</AppText>{totalReserved(finance.accounts) ? <AppText variant="caption">{formatMoney(totalReserved(finance.accounts))} separados em cofres</AppText> : null}</View><Pressable accessibilityRole="button" accessibilityLabel="Adicionar conta" onPress={() => setAdding(true)} style={[styles.add, { backgroundColor: palette.mint }]}><Plus size={22} color={palette.ink} /></Pressable></View>
+          <Surface style={styles.list}>{finance.accounts.length ? finance.accounts.map((item, index) => <View key={item.id}>{index ? <Divider /> : null}<Pressable accessibilityRole="button" accessibilityLabel={`Ver detalhes de ${item.name}`} onPress={() => router.push(`/account-details?id=${encodeURIComponent(item.id)}` as Href)} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}><View style={[styles.icon, { backgroundColor: item.type === 'cash' ? palette.amberDeep : palette.mintDeep }]}>{item.type === 'cash' ? <Banknote size={19} color={palette.amber} /> : item.type === 'wallet' ? <WalletCards size={19} color={palette.mint} /> : <Landmark size={19} color={palette.mint} />}</View><View style={styles.copy}><AppText variant="body">{item.name}</AppText><AppText variant="caption">{item.institution} · {item.reservedCents ? `${formatMoney(item.reservedCents)} guardados` : 'sem cofre'}</AppText></View><AppText variant="mono" style={styles.money}>{formatMoney(accountSpendableCents(item))}</AppText></Pressable></View>) : <EmptyState title="Nenhuma conta cadastrada" description="Adicione conta bancária, carteira digital ou dinheiro para começar a lançar gastos." />}</Surface>
           {!finance.accounts.length ? <PrimaryButton label="Adicionar primeira conta" onPress={() => setAdding(true)} /> : null}
           {finance.error ? <SyncRetry busy={finance.isRefreshing} onRetry={finance.refresh} tone="amber" title="A sincronização falhou" description="Toque para atualizar as contas e conferir o vínculo da família." /> : null}
         </> : <>

@@ -75,10 +75,12 @@ function AppNavigator() {
         <Stack.Screen name="reset-password" />
         <Stack.Screen name="quick-expense" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="accounts" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="account-details" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="cards" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="members" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="security" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="monthly-goal" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="scheduled-expense" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
     </>
   );

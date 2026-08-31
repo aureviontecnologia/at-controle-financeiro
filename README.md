@@ -15,6 +15,9 @@ O projeto Supabase gratuito já está criado na conta técnica da Aurevion, cone
 - Modo de demonstração gratuito, sem servidor, com perfis Alberto/Thauane e dados fictícios.
 - Dashboard conjunto, valores ocultáveis, contas por titular, faturas consolidadas, contas futuras e fluxo mensal.
 - Lançamento rápido idempotente com Pix, débito, dinheiro, boleto, cartão, forma personalizada e parcelamento real por fatura.
+- Contas únicas e assinaturas mensais com vencimento, confirmação de pagamento e lançamento na conta ou fatura escolhida.
+- Cofres e caixinhas vinculados a contas, com saldo reservado separado do dinheiro livre para gastos.
+- Assistente Groq compartilhado com conversa natural, histórico familiar e alterações sempre sujeitas à confirmação.
 - Histórico filtrável por quem registrou — sem criar dívidas internas.
 - Planejamento com meta mensal compartilhada por valor e dia, orçamentos, dívidas externas, cartões, exportação CSV/JSON e assistente.
 - Avisos de novos gastos do outro membro com nome, valor e descrição; cada usuário pode desativá-los.

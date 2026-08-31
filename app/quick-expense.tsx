@@ -9,6 +9,7 @@ import { SyncRetry } from '@/components/SyncRetry';
 import { colors, radii, spacing, type } from '@/constants/theme';
 import { useFinanceData } from '@/hooks/useFinanceData';
 import { formatCentsInput, formatMoney, parseBrlToCents } from '@/lib/format';
+import { accountSpendableCents } from '@/lib/finance';
 import { postOnlineExpense } from '@/lib/financialRepository';
 import { availableCardCents, normalizeInstallments, paymentMethodLabel, paymentMethods, sourcesForPayment, splitInstallmentAmounts, type PaymentMethodId } from '@/lib/payment';
 import { useAuth } from '@/providers/AuthProvider';
@@ -40,7 +41,8 @@ export default function QuickExpenseScreen() {
 
   const sources = useMemo(() => sourcesForPayment(paymentMethod, finance.accounts, finance.cards).map((item) => {
     if (item.sourceKind === 'card') return { id: item.id, name: item.name, detail: `${formatMoney(availableCardCents(item))} disponíveis · final ${item.lastFour ?? 'não informado'}`, availableCents: availableCardCents(item), kind: 'Cartão', sourceKind: item.sourceKind };
-    return { id: item.id, name: `${item.name} · ${item.ownerId === 'alberto' ? 'Alberto' : 'Thauane'}`, detail: `${item.type === 'cash' ? 'Dinheiro' : item.institution} · saldo ${formatMoney(item.balanceCents)}`, availableCents: item.balanceCents, kind: 'Conta', sourceKind: item.sourceKind };
+    const spendable = accountSpendableCents(item);
+    return { id: item.id, name: `${item.name} · ${item.ownerId === 'alberto' ? 'Alberto' : 'Thauane'}`, detail: `${item.type === 'cash' ? 'Dinheiro' : item.institution} · livre ${formatMoney(spendable)}${item.reservedCents ? ` · ${formatMoney(item.reservedCents)} guardados` : ''}`, availableCents: spendable, kind: 'Conta', sourceKind: item.sourceKind };
   }), [finance.accounts, finance.cards, paymentMethod]);
   const selectedSource = sources.find((item) => item.id === sourceId);
 

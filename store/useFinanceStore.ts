@@ -6,7 +6,8 @@ import { create } from 'zustand';
 const { createJSONStorage, persist }: typeof import('zustand/middleware') = require('zustand/middleware');
 
 import { availableCardCents, balanceAfterExpense, paymentMethodLabel, type PaymentMethodId } from '@/lib/payment';
-import type { Account, Budget, CreditCard, ExternalDebt, Member, MonthlyGoal, Transaction, UpcomingExpense } from '@/lib/types';
+import { nextMonthlyOccurrence } from '@/lib/finance';
+import type { Account, Budget, CreditCard, ExternalDebt, Member, MonthlyGoal, SavingsPot, Transaction, UpcomingExpense } from '@/lib/types';
 
 const now = new Date();
 const atDay = (day: number, monthOffset = 0) =>
@@ -38,9 +39,9 @@ const initialTransactions: Transaction[] = [
 ];
 
 const initialUpcoming: UpcomingExpense[] = [
-  { id: 'u1', title: 'Internet', category: 'Casa', dueDate: atDay(5, 1), amountCents: 9900, paid: false },
-  { id: 'u2', title: 'Energia', category: 'Casa', dueDate: atDay(10, 1), amountCents: 18000, paid: false },
-  { id: 'u3', title: 'Aluguel', category: 'Moradia', dueDate: atDay(15, 1), amountCents: 130000, paid: false },
+  { id: 'u1', title: 'Internet', category: 'Casa', dueDate: atDay(5, 1), amountCents: 9900, paid: false, recurrence: 'monthly' },
+  { id: 'u2', title: 'Energia', category: 'Casa', dueDate: atDay(10, 1), amountCents: 18000, paid: false, recurrence: 'monthly' },
+  { id: 'u3', title: 'Aluguel', category: 'Moradia', dueDate: atDay(15, 1), amountCents: 130000, paid: false, recurrence: 'monthly' },
 ];
 
 const initialBudgets: Budget[] = [
@@ -51,6 +52,7 @@ const initialBudgets: Budget[] = [
 
 const initialDebts: ExternalDebt[] = [];
 const initialMonthlyGoal: MonthlyGoal | null = null;
+const initialSavingsPots: SavingsPot[] = [];
 
 type AddExpense = {
   amountCents: number;
@@ -72,6 +74,7 @@ type FinanceState = {
   budgets: Budget[];
   debts: ExternalDebt[];
   monthlyGoal: MonthlyGoal | null;
+  savingsPots: SavingsPot[];
   hideValues: boolean;
   notificationsEnabled: boolean;
   setHideValues: (hide: boolean) => void;
@@ -80,6 +83,10 @@ type FinanceState = {
   addExpense: (expense: AddExpense) => { created: boolean };
   addAccount: (account: Omit<Account, 'id' | 'active'>) => Account;
   addCard: (card: Omit<CreditCard, 'id' | 'usedCents'>) => CreditCard;
+  addScheduledExpense: (expense: Omit<UpcomingExpense, 'id' | 'paid'>) => UpcomingExpense;
+  markScheduledPaid: (id: string) => void;
+  addSavingsPot: (pot: Omit<SavingsPot, 'id' | 'updatedAt'>) => SavingsPot;
+  adjustSavingsPot: (id: string, amountDeltaCents: number) => void;
   resetDemo: () => void;
 };
 
@@ -93,6 +100,7 @@ export const useFinanceStore = create<FinanceState>()(
       budgets: initialBudgets,
       debts: initialDebts,
       monthlyGoal: initialMonthlyGoal,
+      savingsPots: initialSavingsPots,
       hideValues: false,
       notificationsEnabled: true,
       setHideValues: (hideValues) => set({ hideValues }),
@@ -104,7 +112,7 @@ export const useFinanceStore = create<FinanceState>()(
         const account = get().accounts.find((item) => item.id === input.sourceId);
         if (!card && !account) throw new Error('Selecione uma conta ou cartão válido.');
         if (card && input.amountCents > availableCardCents(card)) throw new Error('Limite insuficiente.');
-        if (account) balanceAfterExpense(account.balanceCents, input.amountCents);
+        if (account) balanceAfterExpense(account.balanceCents - (account.reservedCents ?? 0), input.amountCents);
         const transaction: Transaction = {
           id: input.idempotencyKey,
           idempotencyKey: input.idempotencyKey,
@@ -145,15 +153,34 @@ export const useFinanceStore = create<FinanceState>()(
         set((state) => ({ cards: [...state.cards, card] }));
         return card;
       },
-      resetDemo: () => set({ accounts: initialAccounts, cards: initialCards, transactions: initialTransactions, upcoming: initialUpcoming, budgets: initialBudgets, debts: initialDebts, monthlyGoal: initialMonthlyGoal }),
+      addScheduledExpense: (input) => {
+        const expense: UpcomingExpense = { ...input, id: `local-schedule-${Date.now()}`, paid: false };
+        set((state) => ({ upcoming: [...state.upcoming, expense].sort((a, b) => a.dueDate.localeCompare(b.dueDate)) }));
+        return expense;
+      },
+      markScheduledPaid: (id) => set((state) => ({ upcoming: state.upcoming.map((item) => item.id !== id ? item : item.recurrence === 'monthly' ? { ...item, dueDate: nextMonthlyOccurrence(new Date(item.dueDate), new Date(item.dueDate).getDate()).toISOString(), lastPaidAt: new Date().toISOString() } : { ...item, paid: true, lastPaidAt: new Date().toISOString() }) })),
+      addSavingsPot: (input) => {
+        const pot: SavingsPot = { ...input, id: `local-pot-${Date.now()}`, updatedAt: new Date().toISOString() };
+        const account = get().accounts.find((item) => item.id === pot.accountId);
+        if (!account || account.balanceCents - (account.reservedCents ?? 0) < pot.balanceCents) throw new Error('Saldo livre insuficiente.');
+        set((state) => ({ savingsPots: [...state.savingsPots, pot], accounts: state.accounts.map((item) => item.id === pot.accountId ? { ...item, reservedCents: (item.reservedCents ?? 0) + pot.balanceCents } : item) }));
+        return pot;
+      },
+      adjustSavingsPot: (id, amountDeltaCents) => {
+        const pot = get().savingsPots.find((item) => item.id === id);
+        const account = get().accounts.find((item) => item.id === pot?.accountId);
+        if (!pot || !account || pot.balanceCents + amountDeltaCents < 0 || (amountDeltaCents > 0 && account.balanceCents - (account.reservedCents ?? 0) < amountDeltaCents)) throw new Error('Saldo insuficiente.');
+        set((state) => ({ savingsPots: state.savingsPots.map((item) => item.id === id ? { ...item, balanceCents: item.balanceCents + amountDeltaCents, updatedAt: new Date().toISOString() } : item), accounts: state.accounts.map((item) => item.id === account.id ? { ...item, reservedCents: (item.reservedCents ?? 0) + amountDeltaCents } : item) }));
+      },
+      resetDemo: () => set({ accounts: initialAccounts, cards: initialCards, transactions: initialTransactions, upcoming: initialUpcoming, budgets: initialBudgets, debts: initialDebts, monthlyGoal: initialMonthlyGoal, savingsPots: initialSavingsPots }),
     }),
     {
       name: 'aurevion:finance-demo-v1',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 3,
+      version: 4,
       migrate: (persisted) => {
         const state = persisted as Partial<FinanceState>;
-        return { ...state, debts: (state.debts ?? []).filter((item) => item.id !== 'd1'), monthlyGoal: state.monthlyGoal ?? null, notificationsEnabled: state.notificationsEnabled ?? true } as FinanceState;
+        return { ...state, upcoming: (state.upcoming ?? []).map((item) => ({ ...item, recurrence: item.recurrence ?? 'once' })), debts: (state.debts ?? []).filter((item) => item.id !== 'd1'), monthlyGoal: state.monthlyGoal ?? null, savingsPots: state.savingsPots ?? [], notificationsEnabled: state.notificationsEnabled ?? true } as FinanceState;
       },
       partialize: (state) => ({
         accounts: state.accounts,
@@ -163,6 +190,7 @@ export const useFinanceStore = create<FinanceState>()(
         budgets: state.budgets,
         debts: state.debts,
         monthlyGoal: state.monthlyGoal,
+        savingsPots: state.savingsPots,
         hideValues: state.hideValues,
         notificationsEnabled: state.notificationsEnabled,
       }),

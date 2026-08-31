@@ -1,6 +1,6 @@
 import { CalendarDays, CircleDollarSign, Target } from 'lucide-react-native';
 import { router, type Href } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText, Divider, EmptyState, Pill, Screen, SectionHeader, Surface } from '@/components/ui';
 import { colors, radii, spacing } from '@/constants/theme';
@@ -54,9 +54,9 @@ export default function PlanningScreen() {
       </View>
 
       <View style={styles.section}>
-        <SectionHeader title="Próximas contas" />
+        <SectionHeader title="Contas e assinaturas" action="ADICIONAR" onAction={() => router.push('/scheduled-expense' as Href)} />
         <Surface style={styles.stack}>
-          {upcoming.length ? upcoming.map((item, index) => <View key={item.id}>{index ? <Divider /> : null}<View style={styles.itemRow}><View style={[styles.itemIcon, { backgroundColor: palette.skyDeep }]}><CalendarDays size={18} color={palette.sky} /></View><View style={styles.itemCopy}><AppText variant="body">{item.title}</AppText><AppText variant="caption">vence {formatDate(item.dueDate)}</AppText></View><AppText variant="mono" style={styles.smallMoney}>{formatMoney(item.amountCents, hideValues)}</AppText></View></View>) : <EmptyState title="Nenhuma conta prevista" description="Ainda não há vencimentos cadastrados para os próximos dias." />}
+          {upcoming.length ? upcoming.map((item, index) => <View key={item.id}>{index ? <Divider /> : null}<Pressable accessibilityRole="button" onPress={() => router.push(`/scheduled-expense?id=${encodeURIComponent(item.id)}` as Href)} style={({ pressed }) => [styles.itemRow, pressed && styles.pressed]}><View style={[styles.itemIcon, { backgroundColor: palette.skyDeep }]}><CalendarDays size={18} color={palette.sky} /></View><View style={styles.itemCopy}><AppText variant="body">{item.title}</AppText><AppText variant="caption">{item.recurrence === 'monthly' ? 'mensal · ' : ''}vence {formatDate(item.dueDate)}{item.lastPaidAt ? ` · última paga ${formatDate(item.lastPaidAt)}` : ''}</AppText></View><AppText variant="mono" style={styles.smallMoney}>{formatMoney(item.amountCents, hideValues)}</AppText></Pressable></View>) : <EmptyState title="Nenhuma conta prevista" description="Adicione contas únicas ou assinaturas mensais e confirme o pagamento por conta, dinheiro ou cartão." />}
         </Surface>
       </View>
 
@@ -84,4 +84,5 @@ const styles = StyleSheet.create({
   itemIcon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   itemCopy: { flex: 1, gap: 2 },
   smallMoney: { fontSize: 12 },
+  pressed: { opacity: 0.62 },
 });

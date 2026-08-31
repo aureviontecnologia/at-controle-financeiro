@@ -1,5 +1,17 @@
 import type { Account, Budget, CreditCard, ExternalDebt, MonthlyGoal, Transaction, UpcomingExpense } from './types';
 
+export function accountSpendableCents(account: Account) {
+  return Math.max(0, account.balanceCents - (account.reservedCents ?? 0));
+}
+
+export function totalReserved(accounts: Account[]) {
+  return accounts.filter((account) => account.active).reduce((sum, account) => sum + (account.reservedCents ?? 0), 0);
+}
+
+export function totalSpendable(accounts: Account[]) {
+  return accounts.filter((account) => account.active).reduce((sum, account) => sum + accountSpendableCents(account), 0);
+}
+
 export function totalAvailable(accounts: Account[]) {
   return accounts.filter((account) => account.active).reduce((sum, account) => sum + account.balanceCents, 0);
 }
@@ -58,7 +70,7 @@ export function consolidatedImpact(transaction: Transaction) {
 
 export function projectedAvailable(accounts: Account[], upcoming: UpcomingExpense[], cards: CreditCard[]) {
   const future = upcoming.filter((expense) => !expense.paid).reduce((sum, expense) => sum + expense.amountCents, 0);
-  return totalAvailable(accounts) - future - totalCardUsage(cards);
+  return totalSpendable(accounts) - future - totalCardUsage(cards);
 }
 
 export function liquidPosition(

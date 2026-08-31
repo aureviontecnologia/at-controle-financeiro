@@ -3,7 +3,7 @@
     "name": "A&T Controle Financeiro",
     "slug": "aurevion",
     "owner": "aurevion",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "aurevion",
@@ -23,7 +23,7 @@
       "allowBackup": false,
       "package": "com.aurevion.financas",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 1000004,
+      "versionCode": 1000005,
       "permissions": [
         "android.permission.REQUEST_INSTALL_PACKAGES"
       ]

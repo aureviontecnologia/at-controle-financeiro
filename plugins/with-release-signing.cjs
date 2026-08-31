@@ -28,25 +28,34 @@ def aurevionReleaseKeyPassword = System.getenv("AUREVION_RELEASE_KEY_PASSWORD")
       source = source.replace('android {', `${variables}android {`);
     }
 
-    const releaseSigningConfig = `signingConfigs {
+    const signingConfigsIndex = source.indexOf('signingConfigs {');
+    const buildTypesIndex = source.indexOf('buildTypes {');
+    const signingConfigsSource = source.slice(signingConfigsIndex, buildTypesIndex);
+    if (!signingConfigsSource.includes('release {')) {
+      const releaseSigningConfig = `signingConfigs {
         release {
             storeFile file(aurevionReleaseKeystorePath)
             storePassword aurevionReleaseKeystorePassword
             keyAlias aurevionReleaseKeyAlias
             keyPassword aurevionReleaseKeyPassword
         }`;
-    source = source.replace('signingConfigs {', releaseSigningConfig);
-
-    const buildTypesIndex = source.indexOf('buildTypes {');
-    const releaseIndex = source.indexOf('release {', buildTypesIndex);
-    const debugSigningIndex = source.indexOf('signingConfig signingConfigs.debug', releaseIndex);
-    if (debugSigningIndex === -1) {
-      throw new Error('Não foi possível configurar a assinatura release no Gradle gerado.');
+      source = source.replace('signingConfigs {', releaseSigningConfig);
     }
-    source =
-      source.slice(0, debugSigningIndex) +
-      'signingConfig signingConfigs.release' +
-      source.slice(debugSigningIndex + 'signingConfig signingConfigs.debug'.length);
+
+    const refreshedBuildTypesIndex = source.indexOf('buildTypes {');
+    const releaseIndex = source.indexOf('release {', refreshedBuildTypesIndex);
+    const nextBuildTypeIndex = source.indexOf('\n        }', releaseIndex);
+    const releaseBlock = source.slice(releaseIndex, nextBuildTypeIndex);
+    if (!releaseBlock.includes('signingConfig signingConfigs.release')) {
+      const debugSigningIndex = source.indexOf('signingConfig signingConfigs.debug', releaseIndex);
+      if (debugSigningIndex === -1 || debugSigningIndex > nextBuildTypeIndex) {
+        throw new Error('Não foi possível configurar a assinatura release no Gradle gerado.');
+      }
+      source =
+        source.slice(0, debugSigningIndex) +
+        'signingConfig signingConfigs.release' +
+        source.slice(debugSigningIndex + 'signingConfig signingConfigs.debug'.length);
+    }
 
     gradleConfig.modResults.contents = source;
     return gradleConfig;

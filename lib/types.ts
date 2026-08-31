@@ -21,7 +21,17 @@ export type Account = {
   institution: string;
   type: 'checking' | 'wallet' | 'cash';
   balanceCents: number;
+  reservedCents?: number;
   active: boolean;
+};
+
+export type SavingsPot = {
+  id: string;
+  accountId: string;
+  name: string;
+  balanceCents: number;
+  targetCents?: number;
+  updatedAt: string;
 };
 
 export type CreditCard = {
@@ -71,6 +81,12 @@ export type UpcomingExpense = {
   dueDate: string;
   amountCents: number;
   paid: boolean;
+  recurrence?: 'once' | 'monthly';
+  paymentMethod?: string;
+  paymentMethodDetail?: string;
+  defaultAccountId?: string;
+  defaultCardId?: string;
+  lastPaidAt?: string;
 };
 
 export type Budget = {

@@ -85,6 +85,7 @@ export default function AssistantScreen() {
       const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
       return `${greeting}, ${user?.name ?? 'tudo bem'}! Estou por aqui. Podemos conversar normalmente ou olhar juntos os gastos, saldos, faturas, metas e próximos compromissos.`;
     }
+    if (/qual (?:é|e) (?:o )?seu nome|quem (?:é|e) voc[eê]|como voc[eê] se chama/u.test(normalized)) return 'Sou o Assistente da família A&T. Posso conversar normalmente com vocês e, quando pedirem, analisar os dados financeiros compartilhados ou preparar uma alteração para autorização.';
     if (!finance.accounts.length && !finance.transactions.length && !finance.cards.length) return 'Ainda não há dados financeiros sincronizados para analisar. Mesmo assim, posso conversar e ajudar a planejar. Para uma análise real, cadastrem uma conta ou cartão e registrem a primeira movimentação.';
     const flow = monthlyCashFlow(finance.transactions);
     const net = liquidPosition(finance.accounts, finance.cards, finance.debts);

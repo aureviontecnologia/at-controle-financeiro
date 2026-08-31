@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyInternalTransfer, availableCardLimit, budgetProgress, consolidatedImpact, debtOutstanding, liquidPosition, monthlyCashFlow, monthlyGoalDeadline, monthlyGoalProgress, nextMonthlyOccurrence, nextStatementDueDate, projectedAvailable, statementStatus, totalAvailable } from './finance';
+import { accountSpendableCents, applyInternalTransfer, availableCardLimit, budgetProgress, consolidatedImpact, debtOutstanding, liquidPosition, monthlyCashFlow, monthlyGoalDeadline, monthlyGoalProgress, nextMonthlyOccurrence, nextStatementDueDate, projectedAvailable, statementStatus, totalAvailable, totalSpendable } from './finance';
 import type { Account, CreditCard, Transaction } from './types';
 
 const accounts: Account[] = [
@@ -22,6 +22,14 @@ const transaction = (kind: Transaction['kind'], amountCents = 30000): Transactio
 });
 
 describe('invariantes do household', () => {
+  it('separa o dinheiro guardado do saldo livre sem apagar o patrimônio da conta', () => {
+    const reserved = { ...accounts[0], balanceCents: 100_00, reservedCents: 35_00 };
+    expect(accountSpendableCents(reserved)).toBe(65_00);
+    expect(totalSpendable([reserved])).toBe(65_00);
+    expect(projectedAvailable([reserved], [], [])).toBe(65_00);
+    expect(totalAvailable([reserved])).toBe(100_00);
+  });
+
   it('mantém o patrimônio consolidado em transferências internas', () => {
     const before = totalAvailable(accounts);
     const after = applyInternalTransfer(accounts, 'a', 'b', 30000);

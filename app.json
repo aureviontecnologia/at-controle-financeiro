@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "name": "A&T Controle Financeiro",
+    "slug": "aurevion",
+    "version": "1.0.3",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "aurevion",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.aurevion.financas"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#070A0C",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize",
+      "allowBackup": false,
+      "package": "com.aurevion.financas",
+      "googleServicesFile": "./google-services.json",
+      "versionCode": 4,
+      "permissions": [
+        "android.permission.REQUEST_INSTALL_PACKAGES"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#070A0C",
+          "dark": {
+            "backgroundColor": "#070A0C"
+          }
+        }
+      ],
+      "expo-secure-store",
+      "expo-notifications",
+      [
+        "expo-navigation-bar",
+        {
+          "enforceContrast": false,
+          "style": "dark"
+        }
+      ],
+      "./plugins/with-release-signing.cjs"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

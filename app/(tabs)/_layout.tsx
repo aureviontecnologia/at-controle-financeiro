@@ -1,5 +1,6 @@
 import { Redirect, Tabs, useRouter, type ErrorBoundaryProps } from 'expo-router';
 import { CalendarRange, Home, MoreHorizontal, Plus, ReceiptText } from 'lucide-react-native';
+import { useCallback, useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,6 +14,19 @@ export default function TabLayout() {
   const { user } = useAuth();
   const { palette, strawberryEnabled } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const quickRouteLocked = useRef(false);
+  const quickRouteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openQuickExpense = useCallback(() => {
+    if (quickRouteLocked.current) return;
+    quickRouteLocked.current = true;
+    router.push('/quick-expense');
+    quickRouteTimer.current = setTimeout(() => { quickRouteLocked.current = false; }, 700);
+  }, [router]);
+
+  useEffect(() => () => {
+    if (quickRouteTimer.current) clearTimeout(quickRouteTimer.current);
+  }, []);
+
   if (!user) return <Redirect href="/(auth)/login" />;
   return (
     <Tabs
@@ -31,11 +45,10 @@ export default function TabLayout() {
       <Tabs.Screen name="transactions" options={{ title: 'Movimentos', tabBarIcon: ({ color }) => <ReceiptText size={21} color={color} /> }} />
       <Tabs.Screen
         name="quick"
-        listeners={{ tabPress: (event) => { event.preventDefault(); router.push('/quick-expense'); } }}
         options={{
           title: '',
           tabBarButton: () => (
-            <Pressable accessibilityLabel="Adicionar gasto" accessibilityRole="button" style={({ pressed }) => [styles.quickButton, pressed && styles.quickPressed]} onPress={() => router.push('/quick-expense')}>
+            <Pressable accessibilityLabel="Adicionar gasto" accessibilityRole="button" style={({ pressed }) => [styles.quickButton, pressed && styles.quickPressed]} onPress={openQuickExpense}>
               <View style={[styles.quickInner, { backgroundColor: palette.mint }]}>{strawberryEnabled ? <><View style={[styles.leaf, styles.leafLeft]} /><View style={[styles.leaf, styles.leafRight]} /><View style={[styles.quickSeed, styles.quickSeedOne]} /><View style={[styles.quickSeed, styles.quickSeedTwo]} /></> : null}<Plus size={25} color={palette.ink} strokeWidth={2.4} /></View>
             </Pressable>
           ),

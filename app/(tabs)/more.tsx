@@ -32,6 +32,7 @@ export default function MoreScreen() {
   const [notificationPermission, setNotificationPermission] = useState<SharedNotificationPermission>('prompt');
   const [notificationBusy, setNotificationBusy] = useState(false);
   const notifications = local.notificationsEnabled && finance.notificationsEnabled && notificationPermission === 'granted';
+  const displayName = user?.name?.trim() || 'Usuário';
 
   useEffect(() => {
     let active = true;
@@ -79,8 +80,8 @@ export default function MoreScreen() {
     <Screen>
       <View style={styles.heading}><AppText variant="label">A&amp;T CONTROLE FINANCEIRO</AppText><AppText variant="title">Mais</AppText></View>
       <Pressable accessibilityRole="button" accessibilityLabel="Abrir perfil e membros" onPress={() => router.push('/members')}><Surface style={styles.profile}>
-        <View style={[styles.avatar, { backgroundColor: palette.mintDeep }]}><AppText variant="section" style={[styles.avatarText, { color: palette.mint }]}>{user?.name.slice(0, 2).toUpperCase()}</AppText></View>
-        <View style={styles.profileCopy}><AppText variant="section">{user?.name}</AppText><AppText variant="caption">Família A&amp;T · toque para ver atividade</AppText></View>
+        <View style={[styles.avatar, { backgroundColor: palette.mintDeep }]}><AppText variant="section" style={[styles.avatarText, { color: palette.mint }]}>{displayName.slice(0, 2).toUpperCase()}</AppText></View>
+        <View style={styles.profileCopy}><AppText variant="section">{displayName}</AppText><AppText variant="caption">Família A&amp;T · toque para ver atividade</AppText></View>
         <Pill tone={user?.demo ? 'amber' : finance.error ? 'danger' : 'mint'}>{user?.demo ? 'LOCAL' : finance.error ? 'ATENÇÃO' : 'ONLINE'}</Pill>
       </Surface></Pressable>
 

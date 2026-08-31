@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState, type PropsWithChildren } from 'react';
 
 import { configureSharedNotificationHandler } from '@/lib/notifications';
+import { FinanceDataProvider } from '@/hooks/useFinanceData';
 
 import { AuthProvider } from './AuthProvider';
 import { ThemeProvider } from './ThemeProvider';
@@ -29,7 +30,7 @@ export function AppProviders({ children }: PropsWithChildren) {
   );
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider><ThemeProvider><UpdateProvider>{children}</UpdateProvider></ThemeProvider></AuthProvider>
+      <AuthProvider><ThemeProvider><FinanceDataProvider><UpdateProvider>{children}</UpdateProvider></FinanceDataProvider></ThemeProvider></AuthProvider>
     </QueryClientProvider>
   );
 }

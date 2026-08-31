@@ -34,6 +34,30 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 const DEMO_KEY = 'aurevion.demo-user';
 
+type PasswordResetError = {
+  code?: string;
+  message?: string;
+  status?: number;
+};
+
+function passwordResetRedirectUrl() {
+  if (Platform.OS === 'web' && typeof globalThis.location?.origin === 'string') {
+    return `${globalThis.location.origin}/reset-password`;
+  }
+  return Linking.createURL('reset-password');
+}
+
+function passwordResetErrorMessage(error: PasswordResetError) {
+  const details = `${error.code ?? ''} ${error.message ?? ''}`.toLocaleLowerCase('en-US');
+  if (error.status === 429 || details.includes('rate limit')) {
+    return 'Muitos emails foram pedidos em pouco tempo. Aguarde alguns minutos antes de tentar novamente.';
+  }
+  if (details.includes('redirect')) {
+    return 'O endereço de recuperação do aplicativo ainda não está autorizado. Atualize o app e tente novamente.';
+  }
+  return 'Não foi possível enviar o email de recuperação agora. Verifique a conexão e tente novamente.';
+}
+
 function webStorage() {
   return Platform.OS === 'web' && typeof localStorage !== 'undefined' ? localStorage : null;
 }
@@ -153,8 +177,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const requestPasswordReset = useCallback(async (email: string) => {
     if (!supabase) throw new Error('A recuperação estará disponível após conectar o Supabase.');
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: Linking.createURL('/reset-password') });
-    if (error) throw new Error('Não foi possível enviar o email de recuperação agora.');
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: passwordResetRedirectUrl(),
+    });
+    if (error) throw new Error(passwordResetErrorMessage(error));
   }, []);
 
   const confirmPasswordReset = useCallback(async ({ email, code, password }: ConfirmResetInput) => {

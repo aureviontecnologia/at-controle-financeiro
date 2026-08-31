@@ -1,0 +1,36 @@
+project_id = "aurevion"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 17
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "aurevion://"
+additional_redirect_urls = ["exp://127.0.0.1:8081", "http://localhost:8081"]
+enable_signup = true
+minimum_password_length = 10
+
+[auth.rate_limit]
+email_sent = 2
+token_refresh = 120
+sign_in_sign_ups = 20
+token_verifications = 20
+
+[functions.financial-assistant]
+verify_jwt = true
+
+[storage]
+enabled = true
+file_size_limit = "10MiB"

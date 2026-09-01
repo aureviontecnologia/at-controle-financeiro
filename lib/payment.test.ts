@@ -11,7 +11,7 @@ describe('formas de pagamento', () => {
     expect(sourcesForPayment('credit_card', accounts, [card]).map((item) => item.id)).toEqual(['card']);
     expect(sourcesForPayment('cash', accounts, [card]).map((item) => item.id)).toEqual(['cash']);
     expect(sourcesForPayment('pix', accounts, [card]).map((item) => item.id)).toEqual(['bank']);
-    expect(sourcesForPayment('other', accounts, [card]).map((item) => item.id)).toEqual(['bank', 'cash', 'meal']);
+    expect(sourcesForPayment('other', accounts, [card]).map((item) => item.id)).toEqual(['bank', 'cash']);
   });
 
   it('mantém todas as formas ligadas à origem financeira correta', () => {

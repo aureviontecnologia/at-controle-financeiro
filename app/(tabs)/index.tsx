@@ -8,7 +8,7 @@ import { SyncRetry } from '@/components/SyncRetry';
 import { TransactionRow } from '@/components/TransactionRow';
 import { AppText, Divider, EmptyState, Pill, Screen, SectionHeader, Surface } from '@/components/ui';
 import { colors, radii, spacing } from '@/constants/theme';
-import { availableByOwner, liquidPosition, monthlyCashFlow, projectedAvailable, totalAvailable, totalCardUsage } from '@/lib/finance';
+import { availableByOwner, availableCardLimit, liquidPosition, monthlyCashFlow, projectedAvailable, totalAvailable, totalCardUsage } from '@/lib/finance';
 import { formatCompactMoney, formatDate, formatMoney } from '@/lib/format';
 import { useFinanceData } from '@/hooks/useFinanceData';
 import { useAuth } from '@/providers/AuthProvider';
@@ -25,6 +25,7 @@ export default function HomeScreen() {
   const projected = projectedAvailable(accounts, upcoming, cards);
   const flow = monthlyCashFlow(transactions);
   const cardTotal = totalCardUsage(cards);
+  const cardAvailable = availableCardLimit(cards);
   const externalDebtTotal = debts.reduce((sum, item) => sum + item.outstandingCents, 0);
   const netPosition = liquidPosition(accounts, cards, debts);
   const leisure = budgets.find((item) => item.category.toLocaleLowerCase('pt-BR') === 'lazer');
@@ -54,7 +55,8 @@ export default function HomeScreen() {
       <BalanceHero totalCents={available} albertoCents={byOwner.alberto} thauaneCents={byOwner.thauane} projectedCents={projected} hidden={hideValues} onToggleHidden={() => setHideValues(!hideValues)} />
 
       <View style={styles.metrics}>
-        <Surface style={styles.metric}><CreditCard size={18} color={palette.sky} /><AppText variant="caption">FATURAS DO CASAL</AppText><AppText variant="mono">{formatMoney(cardTotal, hideValues)}</AppText></Surface>
+        <Surface style={styles.metric}><CreditCard size={18} color={palette.sky} /><AppText variant="caption">USADO NOS CARTÕES</AppText><AppText variant="mono">{formatMoney(cardTotal, hideValues)}</AppText></Surface>
+        <Pressable accessibilityRole="button" onPress={() => router.push('/cards')} style={styles.metricPressable}><Surface style={styles.metric}><CreditCard size={18} color={palette.mint} /><AppText variant="caption">LIMITE DISPONÍVEL</AppText><AppText variant="mono">{formatMoney(cardAvailable, hideValues)}</AppText></Surface></Pressable>
         <Surface style={styles.metric}><CalendarClock size={18} color={palette.amber} /><AppText variant="caption">PRÓXIMAS CONTAS</AppText><AppText variant="mono">{upcoming.filter((item) => !item.paid).length} previstas</AppText></Surface>
       </View>
 
@@ -109,8 +111,9 @@ const styles = StyleSheet.create({
   headerCopy: { flex: 1, gap: spacing.xs },
   iconButton: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   notificationDot: { position: 'absolute', top: 10, right: 10, width: 6, height: 6, borderRadius: 3, backgroundColor: colors.amber },
-  metrics: { flexDirection: 'row', gap: spacing.md },
-  metric: { flex: 1, minHeight: 126, justifyContent: 'space-between', gap: spacing.sm },
+  metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  metricPressable: { flexGrow: 1, flexBasis: 145 },
+  metric: { flexGrow: 1, flexBasis: 145, minHeight: 118, justifyContent: 'space-between', gap: spacing.sm },
   position: { gap: spacing.sm },
   positionHead: { gap: spacing.sm },
   positionCopy: { minWidth: 0, gap: 2 },

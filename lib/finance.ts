@@ -4,22 +4,40 @@ export function accountSpendableCents(account: Account) {
   return Math.max(0, account.balanceCents - (account.reservedCents ?? 0));
 }
 
+function isRegularAccount(account: Account) {
+  return account.active && account.type !== 'ticket';
+}
+
 export function totalReserved(accounts: Account[]) {
-  return accounts.filter((account) => account.active).reduce((sum, account) => sum + (account.reservedCents ?? 0), 0);
+  return accounts.filter(isRegularAccount).reduce((sum, account) => sum + (account.reservedCents ?? 0), 0);
 }
 
 export function totalSpendable(accounts: Account[]) {
-  return accounts.filter((account) => account.active).reduce((sum, account) => sum + accountSpendableCents(account), 0);
+  return accounts.filter(isRegularAccount).reduce((sum, account) => sum + accountSpendableCents(account), 0);
 }
 
 export function totalAvailable(accounts: Account[]) {
-  return accounts.filter((account) => account.active).reduce((sum, account) => sum + account.balanceCents, 0);
+  return accounts.filter(isRegularAccount).reduce((sum, account) => sum + account.balanceCents, 0);
+}
+
+export function totalTicketBalance(accounts: Account[]) {
+  return accounts.filter((account) => account.active && account.type === 'ticket').reduce((sum, account) => sum + account.balanceCents, 0);
 }
 
 export function availableByOwner(accounts: Account[]) {
   return accounts.reduce(
     (totals, account) => {
-      if (account.active) totals[account.ownerId] += account.balanceCents;
+      if (isRegularAccount(account)) totals[account.ownerId] += account.balanceCents;
+      return totals;
+    },
+    { alberto: 0, thauane: 0 },
+  );
+}
+
+export function ticketByOwner(accounts: Account[]) {
+  return accounts.reduce(
+    (totals, account) => {
+      if (account.active && account.type === 'ticket') totals[account.ownerId] += account.balanceCents;
       return totals;
     },
     { alberto: 0, thauane: 0 },
@@ -84,6 +102,52 @@ function monthKey(date: Date) {
     month: '2-digit',
   }).formatToParts(date);
   return `${parts.find((part) => part.type === 'year')?.value}-${parts.find((part) => part.type === 'month')?.value}`;
+}
+
+export function financeMonthKey(value: Date | string) {
+  const date = typeof value === 'string' ? new Date(value) : value;
+  return Number.isNaN(date.getTime()) ? '' : monthKey(date);
+}
+
+export function cardInvoicesForMonth(cards: CreditCard[], selectedMonth: Date | string) {
+  const selectedKey = financeMonthKey(selectedMonth);
+  return cards.flatMap((card) => (card.invoices ?? [])
+    .filter((invoice) => invoice.status !== 'paid' && financeMonthKey(invoice.dueDate) === selectedKey)
+    .map((invoice) => ({ ...invoice, cardId: card.id, cardName: card.name, closingDay: card.closingDay, dueDay: card.dueDay })));
+}
+
+export function cardInvoiceTotalForMonth(cards: CreditCard[], selectedMonth: Date | string) {
+  return cardInvoicesForMonth(cards, selectedMonth).reduce((sum, invoice) => sum + invoice.amountCents, 0);
+}
+
+export function statementClosingDate(dueDate: string, closingDay: number, dueDay: number) {
+  const due = new Date(dueDate);
+  if (Number.isNaN(due.getTime())) return dueDate;
+  const year = due.getFullYear();
+  const month = due.getMonth() - (dueDay <= closingDay ? 1 : 0);
+  const lastDay = new Date(year, month + 1, 0, 12).getDate();
+  return new Date(year, month, Math.min(Math.max(1, closingDay), lastDay), 12).toISOString();
+}
+
+export function dailyExpenseTotal(transactions: Transaction[], referenceDate = new Date()) {
+  const dayKey = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(referenceDate);
+  return transactions.reduce((sum, transaction) => {
+    if (transaction.kind !== 'expense' && transaction.kind !== 'card_purchase') return sum;
+    const occurredAt = new Date(transaction.occurredAt);
+    if (Number.isNaN(occurredAt.getTime())) return sum;
+    const transactionDay = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(occurredAt);
+    return transactionDay === dayKey ? sum + transaction.amountCents : sum;
+  }, 0);
 }
 
 export function monthlyCashFlow(transactions: Transaction[], referenceDate = new Date()) {

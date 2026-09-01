@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { accountSpendableCents, applyInternalTransfer, availableCardLimit, budgetProgress, consolidatedImpact, creditCardLimitBreakdown, debtOutstanding, liquidPosition, monthlyCashFlow, monthlyGoalDeadline, monthlyGoalProgress, nextMonthlyOccurrence, nextStatementDueDate, normalizeFutureInvoiceMonth, projectedAvailable, statementStatus, totalAvailable, totalSpendable } from './finance';
+import { accountSpendableCents, applyInternalTransfer, availableCardLimit, budgetProgress, cardInvoiceTotalForMonth, consolidatedImpact, creditCardLimitBreakdown, dailyExpenseTotal, debtOutstanding, liquidPosition, monthlyCashFlow, monthlyGoalDeadline, monthlyGoalProgress, nextMonthlyOccurrence, nextStatementDueDate, normalizeFutureInvoiceMonth, projectedAvailable, statementClosingDate, statementStatus, ticketByOwner, totalAvailable, totalSpendable, totalTicketBalance } from './finance';
 import type { Account, CreditCard, Transaction } from './types';
 
 const accounts: Account[] = [
@@ -8,7 +8,7 @@ const accounts: Account[] = [
   { id: 'b', ownerId: 'thauane', name: 'B', institution: 'B', type: 'checking', balanceCents: 50000, active: true },
 ];
 
-const transaction = (kind: Transaction['kind'], amountCents = 30000): Transaction => ({
+const transaction = (kind: Transaction['kind'], amountCents = 30000, occurredAt = new Date().toISOString()): Transaction => ({
   id: kind,
   idempotencyKey: kind,
   kind,
@@ -16,7 +16,7 @@ const transaction = (kind: Transaction['kind'], amountCents = 30000): Transactio
   description: kind,
   category: 'Teste',
   paymentMethod: 'Teste',
-  occurredAt: new Date().toISOString(),
+  occurredAt,
   createdBy: 'alberto',
   syncStatus: 'synced',
 });
@@ -95,6 +95,41 @@ describe('invariantes do household', () => {
     const cards: CreditCard[] = [{ id: 'future', ownerId: 'alberto', name: 'Cartão', limitCents: 150_00, usedCents, closingDay: 25, dueDay: 3 }];
     expect(usedCents).toBe(100_00);
     expect(availableCardLimit(cards)).toBe(50_00);
+  });
+
+  it('mantém ticket fora do patrimônio e da cobertura das faturas', () => {
+    const withTicket: Account[] = [
+      ...accounts,
+      { id: 'ticket', ownerId: 'thauane', name: 'Vale', institution: 'Ticket', type: 'ticket', balanceCents: 80_00, active: true },
+    ];
+    expect(totalAvailable(withTicket)).toBe(totalAvailable(accounts));
+    expect(totalSpendable(withTicket)).toBe(totalSpendable(accounts));
+    expect(totalTicketBalance(withTicket)).toBe(80_00);
+    expect(ticketByOwner(withTicket)).toEqual({ alberto: 0, thauane: 80_00 });
+    expect(liquidPosition(withTicket, [{ id: 'c', ownerId: 'alberto', name: 'C', limitCents: 100_00, usedCents: 50_00, closingDay: 25, dueDay: 5 }], [])).toBe(totalAvailable(accounts) - 50_00);
+  });
+
+  it('soma somente as faturas do mês selecionado', () => {
+    const cards: CreditCard[] = [{
+      id: 'card', ownerId: 'alberto', name: 'Cartão', limitCents: 300_00, usedCents: 180_00, closingDay: 25, dueDay: 5,
+      invoices: [
+        { id: 'sep', dueDate: '2026-09-05T12:00:00-03:00', amountCents: 100_00, status: 'open' },
+        { id: 'oct', dueDate: '2026-10-05T12:00:00-03:00', amountCents: 80_00, status: 'open' },
+      ],
+    }];
+    expect(cardInvoiceTotalForMonth(cards, '2026-09-01T12:00:00-03:00')).toBe(100_00);
+    expect(cardInvoiceTotalForMonth(cards, '2026-10-01T12:00:00-03:00')).toBe(80_00);
+    expect(statementClosingDate(cards[0].invoices![0].dueDate, 25, 5).slice(0, 10)).toBe('2026-08-25');
+  });
+
+  it('calcula o gasto diário sem contar pagamento de fatura', () => {
+    const today = new Date('2026-09-01T18:00:00-03:00');
+    expect(dailyExpenseTotal([
+      transaction('expense', 20_00, '2026-09-01T10:00:00-03:00'),
+      transaction('card_purchase', 30_00, '2026-09-01T12:00:00-03:00'),
+      transaction('card_payment', 50_00, '2026-09-01T14:00:00-03:00'),
+      transaction('expense', 99_00, '2026-08-31T23:00:00-03:00'),
+    ], today)).toBe(50_00);
   });
 
   it('explica quando as faturas ultrapassam o limite em vez de esconder o cálculo', () => {

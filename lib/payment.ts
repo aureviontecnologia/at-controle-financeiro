@@ -1,6 +1,7 @@
 import type { Account, CreditCard } from './types';
 
-export type PaymentMethodId = 'pix' | 'credit_card' | 'debit_card' | 'cash' | 'transfer' | 'bank_slip' | 'other';
+export type PaymentMethodId = 'pix' | 'credit_card' | 'debit_card' | 'cash' | 'transfer' | 'bank_slip' | 'ticket' | 'other';
+export type DatabasePaymentMethodId = Exclude<PaymentMethodId, 'ticket'>;
 
 export const paymentMethods: Array<{ id: PaymentMethodId; name: string; detail: string }> = [
   { id: 'pix', name: 'Pix', detail: 'Sai de uma conta' },
@@ -9,6 +10,7 @@ export const paymentMethods: Array<{ id: PaymentMethodId; name: string; detail: 
   { id: 'cash', name: 'Dinheiro', detail: 'Usa uma conta do tipo dinheiro' },
   { id: 'transfer', name: 'Transferência', detail: 'TED, DOC ou transferência' },
   { id: 'bank_slip', name: 'Boleto', detail: 'Pago por uma conta' },
+  { id: 'ticket', name: 'Ticket', detail: 'Vale-refeição ou alimentação' },
   { id: 'other', name: 'Outra forma', detail: 'Você descreve como pagou' },
 ];
 
@@ -32,8 +34,17 @@ export function balanceAfterExpense(balanceCents: number, amountCents: number) {
 export function paymentMethodLabel(method: PaymentMethodId, detail?: string, installmentCount = 1) {
   const base = paymentMethods.find((item) => item.id === method)?.name ?? 'Outra forma';
   if (method === 'credit_card') return `${base} · ${Math.max(1, installmentCount)}x`;
+  if (method === 'ticket' || (method === 'other' && detail?.trim().toLocaleLowerCase('pt-BR') === 'ticket')) return 'Ticket';
   if (method === 'other' && detail?.trim()) return `${base} · ${detail.trim()}`;
   return base;
+}
+
+export function databasePaymentMethod(method: PaymentMethodId): DatabasePaymentMethodId {
+  return method === 'ticket' ? 'other' : method;
+}
+
+export function paymentMethodDetail(method: PaymentMethodId, detail?: string) {
+  return method === 'ticket' ? 'Ticket' : detail?.trim() || undefined;
 }
 
 export function normalizeInstallments(value: number) {

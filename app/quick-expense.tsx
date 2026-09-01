@@ -37,6 +37,7 @@ export default function QuickExpenseScreen() {
   const [sourceId, setSourceId] = useState('');
   const [step, setStep] = useState<Step>('main');
   const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const idempotencyKey = useRef(Crypto.randomUUID());
 
   const sources = useMemo(() => sourcesForPayment(paymentMethod, finance.accounts, finance.cards).map((item) => {
@@ -57,12 +58,18 @@ export default function QuickExpenseScreen() {
     setStep('main');
   }
 
+  function reportError(title: string, message: string) {
+    setFeedback(`${title}: ${message}`);
+    if (Platform.OS !== 'web') Alert.alert(title, message);
+  }
+
   async function save() {
-    if (amountCents <= 0) return Alert.alert('Digite um valor', 'O gasto precisa ser maior que zero.');
-    if (!selectedSource) return Alert.alert('Escolha onde pagou', paymentMethod === 'credit_card' ? 'Adicione ou selecione um cartão.' : paymentMethod === 'cash' ? 'Adicione uma conta do tipo Dinheiro.' : 'Adicione ou selecione uma conta.');
-    if (paymentMethod === 'other' && paymentDetail.trim().length < 2) return Alert.alert('Descreva como pagou', 'Digite a forma de pagamento utilizada.');
-    if (paymentMethod === 'credit_card' && amountCents < installmentCount) return Alert.alert('Parcelamento inválido', 'O valor precisa permitir ao menos um centavo por parcela.');
-    if (amountCents > selectedSource.availableCents) return Alert.alert(paymentMethod === 'credit_card' ? 'Limite insuficiente' : 'Saldo insuficiente', `Disponível nesta opção: ${formatMoney(selectedSource.availableCents)}.`);
+    setFeedback(null);
+    if (amountCents <= 0) return reportError('Digite um valor', 'O gasto precisa ser maior que zero.');
+    if (!selectedSource) return reportError('Escolha onde pagou', paymentMethod === 'credit_card' ? 'Adicione ou selecione um cartão.' : paymentMethod === 'cash' ? 'Adicione uma conta do tipo Dinheiro.' : 'Adicione ou selecione uma conta.');
+    if (paymentMethod === 'other' && paymentDetail.trim().length < 2) return reportError('Descreva como pagou', 'Digite a forma de pagamento utilizada.');
+    if (paymentMethod === 'credit_card' && amountCents < installmentCount) return reportError('Parcelamento inválido', 'O valor precisa permitir ao menos um centavo por parcela.');
+    if (amountCents > selectedSource.availableCents) return reportError(paymentMethod === 'credit_card' ? 'Limite insuficiente' : 'Saldo insuficiente', `Disponível nesta opção: ${formatMoney(selectedSource.availableCents)}.`);
     setSaving(true);
     try {
       if (user?.demo) {
@@ -75,7 +82,7 @@ export default function QuickExpenseScreen() {
       }
       router.back();
     } catch (reason) {
-      Alert.alert('Não foi possível salvar', reason instanceof Error ? reason.message : 'Tente novamente.');
+      reportError('Não foi possível salvar', reason instanceof Error ? reason.message : 'Tente novamente.');
       setSaving(false);
     }
   }
@@ -89,9 +96,10 @@ export default function QuickExpenseScreen() {
           <Pressable accessibilityRole="button" accessibilityLabel={step === 'main' ? 'Fechar' : 'Voltar'} onPress={() => step === 'main' ? router.back() : setStep('main')} style={[styles.close, { backgroundColor: palette.surface }]}><X size={20} color={palette.text} /></Pressable>
           <AppText variant="section">{title}</AppText><View style={styles.headerSpacer} />
         </View>
+        {feedback ? <View accessibilityRole="alert" style={[styles.warning, { backgroundColor: palette.dangerDeep }]}><AppText variant="body" style={{ color: palette.danger }}>{feedback}</AppText></View> : null}
 
         {step === 'main' ? <>
-          <View style={styles.amountArea}><AppText variant="label">VALOR</AppText><View style={styles.amountRow}><AppText variant="title" style={{ color: palette.textMuted }}>R$</AppText><TextInput accessibilityLabel="Valor do gasto" autoFocus keyboardType="number-pad" value={formatCentsInput(amountCents)} onChangeText={(value) => setAmountCents(parseBrlToCents(value))} selectionColor={palette.mint} style={[styles.amountInput, { color: palette.text }]} /></View></View>
+          <View style={styles.amountArea}><AppText variant="label">VALOR</AppText><View style={styles.amountRow}><AppText variant="title" style={{ color: palette.textMuted }}>R$</AppText><MoneyEntry value={amountCents} onChange={setAmountCents} /></View></View>
           {finance.error ? <SyncRetry busy={finance.isRefreshing} onRetry={finance.refresh} tone="amber" title="Os dados não sincronizaram" description="Atualize antes de escolher a conta ou o cartão." /> : null}
           <View style={styles.form}>
             <View style={styles.field}><AppText variant="label">Descrição opcional</AppText><TextInput accessibilityLabel="Descrição" placeholder="Ex.: almoço" placeholderTextColor={palette.textDim} value={description} onChangeText={setDescription} style={[styles.input, { backgroundColor: palette.surface, color: palette.text }]} selectionColor={palette.mint} /></View>
@@ -116,6 +124,12 @@ export default function QuickExpenseScreen() {
 function Selector({ label, value, detail, onPress }: { label: string; value: string; detail?: string; onPress: () => void }) {
   const { palette } = useAppTheme();
   return <View style={styles.field}><AppText variant="label">{label}</AppText><Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.selector, { backgroundColor: pressed ? palette.surfacePressed : palette.surface }]}><View style={styles.selectorCopy}><AppText variant="body">{value}</AppText>{detail ? <AppText variant="caption">{detail}</AppText> : null}</View><ChevronDown size={18} color={palette.textMuted} /></Pressable></View>;
+}
+
+function MoneyEntry({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const { palette } = useAppTheme();
+  const [draft, setDraft] = useState<string | null>(null);
+  return <TextInput accessibilityLabel="Valor do gasto" autoFocus keyboardType="number-pad" selectTextOnFocus value={draft ?? formatCentsInput(value)} onFocus={() => setDraft(formatCentsInput(value))} onBlur={() => setDraft(null)} onChangeText={(text) => { setDraft(text); onChange(parseBrlToCents(text)); }} selectionColor={palette.mint} style={[styles.amountInput, { color: palette.text }]} />;
 }
 
 function Choice({ name, detail, selected, onPress }: { name: string; detail?: string; selected: boolean; onPress: () => void }) {

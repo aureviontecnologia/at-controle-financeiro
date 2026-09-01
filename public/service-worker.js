@@ -1,4 +1,4 @@
-const CACHE_NAME = 'at-financeiro-shell-v103';
+const CACHE_NAME = 'at-financeiro-shell-v104';
 const APP_SHELL = ['/', '/manifest.json', '/pwa-192.png', '/pwa-512.png', '/apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {

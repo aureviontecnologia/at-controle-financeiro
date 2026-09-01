@@ -77,6 +77,7 @@ function AppNavigator() {
         <Stack.Screen name="accounts" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="account-details" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="cards" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="pay-card-statement" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="members" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="security" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="monthly-goal" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />

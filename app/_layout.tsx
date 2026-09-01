@@ -81,6 +81,7 @@ function AppNavigator() {
         <Stack.Screen name="members" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="security" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="monthly-goal" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="daily-limit" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="scheduled-expense" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
     </>

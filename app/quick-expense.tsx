@@ -9,8 +9,9 @@ import { SyncRetry } from '@/components/SyncRetry';
 import { colors, radii, spacing, type } from '@/constants/theme';
 import { useFinanceData } from '@/hooks/useFinanceData';
 import { formatCentsInput, formatMoney, parseBrlToCents } from '@/lib/format';
-import { accountSpendableCents } from '@/lib/finance';
+import { accountSpendableCents, dailyExpenseTotal } from '@/lib/finance';
 import { postOnlineExpense } from '@/lib/financialRepository';
+import { notifyPartnerActivity } from '@/lib/notifications';
 import { availableCardCents, normalizeInstallments, paymentMethodLabel, paymentMethods, sourcesForPayment, splitInstallmentAmounts, type PaymentMethodId } from '@/lib/payment';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
@@ -46,6 +47,7 @@ export default function QuickExpenseScreen() {
     return { id: item.id, name: `${item.name} · ${item.ownerId === 'alberto' ? 'Alberto' : 'Thauane'}`, detail: `${item.type === 'cash' ? 'Dinheiro' : item.institution} · livre ${formatMoney(spendable)}${item.reservedCents ? ` · ${formatMoney(item.reservedCents)} guardados` : ''}`, availableCents: spendable, kind: 'Conta', sourceKind: item.sourceKind };
   }), [finance.accounts, finance.cards, paymentMethod]);
   const selectedSource = sources.find((item) => item.id === sourceId);
+  const spentTodayBefore = dailyExpenseTotal(finance.transactions);
 
   useEffect(() => {
     if (!sources.some((item) => item.id === sourceId)) setSourceId(sources[0]?.id ?? '');
@@ -80,7 +82,10 @@ export default function QuickExpenseScreen() {
       } else {
         if (!finance.householdId) throw new Error('A Família A&T ainda não terminou de sincronizar. Tente novamente.');
         await postOnlineExpense({ householdId: finance.householdId, sourceId, sourceKind: selectedSource.sourceKind, amountCents, description: description.trim() || category, category, paymentMethod, paymentMethodDetail: paymentDetail, installmentCount, occurredAt: new Date().toISOString(), idempotencyKey: idempotencyKey.current });
-        await finance.refresh();
+        if (finance.dailySpendLimitCents > 0 && spentTodayBefore <= finance.dailySpendLimitCents && spentTodayBefore + amountCents > finance.dailySpendLimitCents) {
+          void notifyPartnerActivity(finance.householdId, { type: 'daily_limit', amountCents: spentTodayBefore + amountCents, description: `limite diário de ${formatMoney(finance.dailySpendLimitCents)}` });
+        }
+        void finance.refresh();
       }
       router.back();
     } catch (reason) {

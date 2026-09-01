@@ -21,8 +21,9 @@ export default function AccountDetailsScreen() {
   const addLocalPot = useFinanceStore((state) => state.addSavingsPot);
   const adjustLocalPot = useFinanceStore((state) => state.adjustSavingsPot);
   const [selectedAccountId, setSelectedAccountId] = useState('');
-  const effectiveAccountId = finance.accounts.some((item) => item.id === id) ? id : selectedAccountId || finance.accounts[0]?.id;
-  const account = finance.accounts.find((item) => item.id === effectiveAccountId);
+  const eligibleAccounts = finance.accounts.filter((item) => item.type !== 'ticket');
+  const effectiveAccountId = eligibleAccounts.some((item) => item.id === id) ? id : selectedAccountId || eligibleAccounts[0]?.id;
+  const account = eligibleAccounts.find((item) => item.id === effectiveAccountId);
   const pots = finance.savingsPots.filter((item) => item.accountId === effectiveAccountId);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
@@ -36,7 +37,7 @@ export default function AccountDetailsScreen() {
 
   async function refreshAfter(action: () => Promise<unknown> | unknown) {
     setSaving(true);
-    try { await action(); await finance.refresh(); }
+    try { await action(); if (!user?.demo) void finance.refresh(); }
     catch (reason) { Alert.alert('Não foi possível concluir', reason instanceof Error ? reason.message : 'Tente novamente.'); }
     finally { setSaving(false); }
   }
@@ -72,7 +73,7 @@ export default function AccountDetailsScreen() {
 
   return <KeyboardAvoidingView style={[styles.flex, { backgroundColor: palette.ink }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><Screen>
     <Header title={id ? 'Detalhes da conta' : 'Cofres e caixinhas'} />
-    {!id && finance.accounts.length > 1 ? <View style={styles.field}><AppText variant="label">CONTA ONDE O DINHEIRO ESTÁ</AppText><View style={styles.accountOptions}>{finance.accounts.map((item) => <Pressable key={item.id} onPress={() => { setSelectedAccountId(item.id); setSelectedPotId(''); }} style={[styles.accountOption, { backgroundColor: palette.surface, borderColor: item.id === effectiveAccountId ? palette.mint : palette.lineSoft }]}><View style={styles.copy}><AppText variant="body">{item.name}</AppText><AppText variant="caption">{formatMoney(accountSpendableCents(item))} livres · {formatMoney(item.reservedCents ?? 0)} guardados</AppText></View>{item.id === effectiveAccountId ? <View style={[styles.selectedDot, { backgroundColor: palette.mint }]} /> : null}</Pressable>)}</View></View> : null}
+    {!id && eligibleAccounts.length > 1 ? <View style={styles.field}><AppText variant="label">CONTA ONDE O DINHEIRO ESTÁ</AppText><View style={styles.accountOptions}>{eligibleAccounts.map((item) => <Pressable key={item.id} onPress={() => { setSelectedAccountId(item.id); setSelectedPotId(''); }} style={[styles.accountOption, { backgroundColor: palette.surface, borderColor: item.id === effectiveAccountId ? palette.mint : palette.lineSoft }]}><View style={styles.copy}><AppText variant="body">{item.name}</AppText><AppText variant="caption">{formatMoney(accountSpendableCents(item))} livres · {formatMoney(item.reservedCents ?? 0)} guardados</AppText></View>{item.id === effectiveAccountId ? <View style={[styles.selectedDot, { backgroundColor: palette.mint }]} /> : null}</Pressable>)}</View></View> : null}
     <View style={styles.heading}><AppText variant="title">{account.name}</AppText><AppText variant="bodyMuted">{account.institution} · {account.ownerId === 'alberto' ? 'Alberto' : 'Thauane'}</AppText></View>
     <Surface style={styles.balance}><View><AppText variant="caption">SALDO LIVRE</AppText><AppText variant="display">{formatMoney(accountSpendableCents(account))}</AppText></View><View><AppText variant="caption">GUARDADO</AppText><AppText variant="mono">{formatMoney(account.reservedCents ?? 0)}</AppText></View><View><AppText variant="caption">TOTAL NO BANCO</AppText><AppText variant="mono">{formatMoney(account.balanceCents)}</AppText></View></Surface>
     <View style={styles.sectionHeading}><View><AppText variant="section">Cofres e caixinhas</AppText><AppText variant="caption">O valor fica separado e não pode ser gasto por engano.</AppText></View><Pressable accessibilityLabel="Criar cofre" onPress={() => setAdding((value) => !value)} style={[styles.iconButton, { backgroundColor: palette.mint }]}><Plus size={20} color={palette.ink} /></Pressable></View>

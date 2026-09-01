@@ -22,6 +22,7 @@ export type FinanceSnapshot = {
   debts: ExternalDebt[];
   monthlyGoal: MonthlyGoal | null;
   savingsPots: SavingsPot[];
+  dailySpendLimitCents: number;
   notificationsEnabled: boolean;
   members: HouseholdMember[];
 };
@@ -58,6 +59,22 @@ function normalizeFinanceError(reason: unknown): FinanceDataError {
   return new FinanceDataError('server', 'O servidor respondeu, mas não foi possível carregar os dados agora.');
 }
 
+type MutationResult<T> = { data: T | null; error: { code?: string; message: string } | null };
+
+function isTransientMutationError(error: MutationResult<unknown>['error']) {
+  const message = `${error?.code ?? ''} ${error?.message ?? ''}`.toLocaleLowerCase('pt-BR');
+  return message.includes('timeout') || message.includes('fetch') || message.includes('connection') || message.includes('warp server');
+}
+
+async function mutationWithRetry<T>(operation: () => PromiseLike<MutationResult<T>>) {
+  let result = await operation();
+  if (result.error && isTransientMutationError(result.error)) {
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    result = await operation();
+  }
+  return result;
+}
+
 async function resolveHousehold(userId: string) {
   if (!supabase) throw new FinanceDataError('server', 'Supabase não configurado.');
   const membershipResult = await supabase.from('household_members').select('household_id').eq('user_id', userId).eq('status', 'active').limit(1).maybeSingle();
@@ -87,20 +104,29 @@ export async function fetchFinanceSnapshot(userId: string): Promise<FinanceSnaps
   try {
   const householdId = await resolveHousehold(userId);
 
-  const [membersResult, accountsResult, cardsResult, statementsResult, categoriesResult, transactionsResult, upcomingResult, budgetsResult, debtsResult, debtPaymentsResult, goalResult, preferencesResult, savingsResult] = await Promise.all([
+  // O PWA no iPhone sofria timeout ao abrir 13 conexões REST ao mesmo tempo.
+  // Lotes pequenos mantêm o plano gratuito estável sem deixar a interface presa.
+  const [membersResult, accountsResult, cardsResult, statementsResult] = await Promise.all([
     supabase.from('household_members').select('user_id,role,status,joined_at').eq('household_id', householdId).eq('status', 'active'),
     supabase.from('account_balances').select('*').eq('household_id', householdId),
     supabase.from('credit_cards').select('*').eq('household_id', householdId).eq('is_active', true).is('archived_at', null),
     supabase.from('statement_totals').select('*').eq('household_id', householdId),
+  ]);
+  const [categoriesResult, transactionsResult, upcomingResult, budgetsResult] = await Promise.all([
     supabase.from('categories').select('id,name').eq('household_id', householdId),
     supabase.from('transactions').select('*').eq('household_id', householdId).eq('status', 'posted').is('deleted_at', null).order('occurred_at', { ascending: false }).range(0, 199),
     supabase.from('scheduled_expenses').select('*').eq('household_id', householdId).is('deleted_at', null).in('status', ['active', 'completed']).order('due_date'),
     supabase.from('budgets').select('*').eq('household_id', householdId).eq('month', currentMonthDate()),
+  ]);
+  const [debtsResult, debtPaymentsResult, goalResult, preferencesResult] = await Promise.all([
     supabase.from('debts').select('*').eq('household_id', householdId).is('deleted_at', null).eq('status', 'active'),
     supabase.from('debt_payments').select('debt_id,amount_cents').eq('household_id', householdId),
     supabase.from('monthly_goals').select('*').eq('household_id', householdId).eq('month', currentMonthDate()).maybeSingle(),
     supabase.from('notification_preferences').select('new_transaction').eq('household_id', householdId).eq('user_id', userId).maybeSingle(),
+  ]);
+  const [savingsResult, settingsResult] = await Promise.all([
     supabase.from('savings_pots').select('*').eq('household_id', householdId).is('archived_at', null).order('created_at'),
+    supabase.from('household_finance_settings').select('daily_spend_limit_cents').eq('household_id', householdId).maybeSingle(),
   ]);
 
   const rawMembers = assertData(membersResult.data, membersResult.error) as Array<{ user_id: string; role: 'owner' | 'member'; status: string; joined_at: string }>;
@@ -189,6 +215,7 @@ export async function fetchFinanceSnapshot(userId: string): Promise<FinanceSnaps
   const debts: ExternalDebt[] = (assertData(debtsResult.data, debtsResult.error) as Array<Record<string, any>>).map((item) => ({ id: item.id, creditor: item.creditor, outstandingCents: Math.max(0, Number(item.original_amount_cents) - (debtPaid.get(item.id) ?? 0)), nextPaymentCents: 0, dueDate: item.due_date ? `${item.due_date}T12:00:00-03:00` : new Date().toISOString() }));
   if (goalResult.error) throw goalResult.error;
   if (preferencesResult.error) throw preferencesResult.error;
+  if (settingsResult.error && settingsResult.error.code !== '42P01') throw settingsResult.error;
   const monthlyGoal: MonthlyGoal | null = goalResult.data ? {
     id: goalResult.data.id,
     month: goalResult.data.month,
@@ -198,6 +225,7 @@ export async function fetchFinanceSnapshot(userId: string): Promise<FinanceSnaps
     updatedAt: goalResult.data.updated_at,
   } : null;
   const notificationsEnabled = preferencesResult.data?.new_transaction ?? true;
+  const dailySpendLimitCents = Number(settingsResult.data?.daily_spend_limit_cents ?? 0);
   const members: HouseholdMember[] = rawMembers.map((item) => {
     const profile = profilesById.get(item.user_id);
     const normalizedId = memberId(profile?.display_name);
@@ -212,7 +240,7 @@ export async function fetchFinanceSnapshot(userId: string): Promise<FinanceSnaps
       isCurrent: item.user_id === userId,
     };
   });
-  return { householdId, accounts, cards, transactions, upcoming, budgets, debts, monthlyGoal, savingsPots, notificationsEnabled, members };
+  return { householdId, accounts, cards, transactions, upcoming, budgets, debts, monthlyGoal, savingsPots, dailySpendLimitCents, notificationsEnabled, members };
   } catch (reason) {
     throw normalizeFinanceError(reason);
   }
@@ -306,17 +334,29 @@ export async function postOnlineExpense(input: { householdId: string; sourceId: 
   return data as string;
 }
 
-export async function createOnlineAccount(input: { householdId: string; userId: string; name: string; institution: string; type: Account['type']; openingBalanceCents: number; expectedReloadDay?: number; expectedReloadCents?: number }) {
+export async function createOnlineAccount(input: { householdId: string; userId: string; name: string; institution: string; type: Account['type']; openingBalanceCents: number; expectedReloadDay?: number; expectedReloadCents?: number; idempotencyKey: string }) {
   if (!supabase) throw new Error('Supabase não configurado.');
-  const { data, error } = await supabase.from('accounts').insert({ household_id: input.householdId, owner_id: input.userId, created_by: input.userId, name: input.name.trim(), institution: input.institution.trim(), kind: input.type === 'ticket' ? 'wallet' : input.type, opening_balance_cents: input.openingBalanceCents, ticket_reload_day: input.type === 'ticket' ? input.expectedReloadDay : null, ticket_reload_cents: input.type === 'ticket' ? input.expectedReloadCents : null }).select('id').single();
-  if (error) throw new Error('Não foi possível adicionar a conta. Confira os dados e tente novamente.');
+  const client = supabase;
+  const { data, error } = await mutationWithRetry(() => client.rpc('create_financial_account', {
+    target_household: input.householdId,
+    account_name: input.name.trim(),
+    account_institution: input.institution.trim(),
+    account_kind: input.type === 'ticket' ? 'wallet' : input.type,
+    opening_amount: input.openingBalanceCents,
+    is_ticket: input.type === 'ticket',
+    reload_day: input.type === 'ticket' ? input.expectedReloadDay : null,
+    reload_cents: input.type === 'ticket' ? input.expectedReloadCents : null,
+    request_key: input.idempotencyKey,
+  }));
+  if (error || !data) throw new Error(isTransientMutationError(error) ? 'O servidor demorou para responder. A conta não será duplicada; toque em salvar novamente.' : 'Não foi possível adicionar a conta. Confira os dados e tente novamente.');
   await notifyPartnerActivity(input.householdId, { type: 'account', amountCents: input.openingBalanceCents, description: input.name.trim() });
-  return data.id as string;
+  return data as string;
 }
 
-export async function createOnlineCard(input: { householdId: string; userId: string; name: string; institution: string; lastFour?: string; limitCents: number; additionalLimitCents?: number; reportedUsedCents?: number; currentInvoiceCents: number; futureInvoices: Array<{ month: string; amountCents: number }>; closingDay: number; dueDay: number }) {
+export async function createOnlineCard(input: { householdId: string; userId: string; name: string; institution: string; lastFour?: string; limitCents: number; additionalLimitCents?: number; reportedUsedCents?: number; currentInvoiceCents: number; futureInvoices: Array<{ month: string; amountCents: number }>; closingDay: number; dueDay: number; idempotencyKey: string }) {
   if (!supabase) throw new Error('Supabase não configurado.');
-  const { data, error } = await supabase.rpc('create_credit_card_with_current_invoice', {
+  const client = supabase;
+  const { data, error } = await mutationWithRetry(() => client.rpc('create_credit_card_idempotent', {
     target_household: input.householdId,
     card_name: input.name.trim(),
     card_institution: input.institution.trim(),
@@ -328,14 +368,26 @@ export async function createOnlineCard(input: { householdId: string; userId: str
     future_invoices: input.futureInvoices,
     card_additional_limit: input.additionalLimitCents ?? 0,
     reported_used: input.reportedUsedCents || null,
-  });
+    request_key: input.idempotencyKey,
+  }));
   if (error || !data) {
     if (error?.message.includes('invalid_future_invoice')) throw new Error('Uma fatura futura está com mês ou valor inválido.');
     if (error?.message.includes('invalid_card_data')) throw new Error('O limite usado não pode ultrapassar o limite total do cartão.');
-    throw new Error('Não foi possível adicionar o cartão. Confira limite, fatura e datas.');
+    throw new Error(isTransientMutationError(error) ? 'O servidor demorou para responder. O cartão não será duplicado; toque em salvar novamente.' : 'Não foi possível adicionar o cartão. Confira limite, fatura e datas.');
   }
   await notifyPartnerActivity(input.householdId, { type: 'card', amountCents: input.limitCents + (input.additionalLimitCents ?? 0), description: input.name.trim() });
   return data as string;
+}
+
+export async function saveOnlineDailySpendLimit(input: { householdId: string; amountCents: number }) {
+  if (!supabase) throw new Error('Supabase não configurado.');
+  const client = supabase;
+  const { data, error } = await mutationWithRetry(() => client.rpc('set_daily_spend_limit', {
+    target_household: input.householdId,
+    limit_amount: input.amountCents,
+  }));
+  if (error || data == null) throw new Error('Não foi possível salvar o limite diário. Tente novamente.');
+  return Number(data);
 }
 
 export async function payOnlineCardStatement(input: { householdId: string; statementId: string; accountId: string; amountCents: number; idempotencyKey: string }) {

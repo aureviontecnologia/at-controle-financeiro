@@ -77,8 +77,10 @@ type FinanceState = {
   savingsPots: SavingsPot[];
   hideValues: boolean;
   notificationsEnabled: boolean;
+  dailySpendLimitCents: number;
   setHideValues: (hide: boolean) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
+  setDailySpendLimit: (amountCents: number) => void;
   setMonthlyGoal: (goal: MonthlyGoal) => void;
   addExpense: (expense: AddExpense) => { created: boolean };
   addAccount: (account: Omit<Account, 'id' | 'active'>) => Account;
@@ -106,8 +108,10 @@ export const useFinanceStore = create<FinanceState>()(
       savingsPots: initialSavingsPots,
       hideValues: false,
       notificationsEnabled: true,
+      dailySpendLimitCents: 0,
       setHideValues: (hideValues) => set({ hideValues }),
       setNotificationsEnabled: (notificationsEnabled) => set({ notificationsEnabled }),
+      setDailySpendLimit: (dailySpendLimitCents) => set({ dailySpendLimitCents: Math.max(0, dailySpendLimitCents) }),
       setMonthlyGoal: (monthlyGoal) => set({ monthlyGoal }),
       addExpense: (input) => {
         if (get().transactions.some((transaction) => transaction.idempotencyKey === input.idempotencyKey)) return { created: false };
@@ -232,15 +236,15 @@ export const useFinanceStore = create<FinanceState>()(
         if (!pot || !account || pot.balanceCents + amountDeltaCents < 0 || (amountDeltaCents > 0 && account.balanceCents - (account.reservedCents ?? 0) < amountDeltaCents)) throw new Error('Saldo insuficiente.');
         set((state) => ({ savingsPots: state.savingsPots.map((item) => item.id === id ? { ...item, balanceCents: item.balanceCents + amountDeltaCents, updatedAt: new Date().toISOString() } : item), accounts: state.accounts.map((item) => item.id === account.id ? { ...item, reservedCents: (item.reservedCents ?? 0) + amountDeltaCents } : item) }));
       },
-      resetDemo: () => set({ accounts: initialAccounts, cards: initialCards, transactions: initialTransactions, upcoming: initialUpcoming, budgets: initialBudgets, debts: initialDebts, monthlyGoal: initialMonthlyGoal, savingsPots: initialSavingsPots }),
+      resetDemo: () => set({ accounts: initialAccounts, cards: initialCards, transactions: initialTransactions, upcoming: initialUpcoming, budgets: initialBudgets, debts: initialDebts, monthlyGoal: initialMonthlyGoal, savingsPots: initialSavingsPots, dailySpendLimitCents: 0 }),
     }),
     {
       name: 'aurevion:finance-demo-v1',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 4,
+      version: 5,
       migrate: (persisted) => {
         const state = persisted as Partial<FinanceState>;
-        return { ...state, upcoming: (state.upcoming ?? []).map((item) => ({ ...item, recurrence: item.recurrence ?? 'once' })), debts: (state.debts ?? []).filter((item) => item.id !== 'd1'), monthlyGoal: state.monthlyGoal ?? null, savingsPots: state.savingsPots ?? [], notificationsEnabled: state.notificationsEnabled ?? true } as FinanceState;
+        return { ...state, upcoming: (state.upcoming ?? []).map((item) => ({ ...item, recurrence: item.recurrence ?? 'once' })), debts: (state.debts ?? []).filter((item) => item.id !== 'd1'), monthlyGoal: state.monthlyGoal ?? null, savingsPots: state.savingsPots ?? [], notificationsEnabled: state.notificationsEnabled ?? true, dailySpendLimitCents: state.dailySpendLimitCents ?? 0 } as FinanceState;
       },
       partialize: (state) => ({
         accounts: state.accounts,
@@ -253,6 +257,7 @@ export const useFinanceStore = create<FinanceState>()(
         savingsPots: state.savingsPots,
         hideValues: state.hideValues,
         notificationsEnabled: state.notificationsEnabled,
+        dailySpendLimitCents: state.dailySpendLimitCents,
       }),
     },
   ),

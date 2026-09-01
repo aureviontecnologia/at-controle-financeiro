@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { accountSpendableCents, applyInternalTransfer, availableCardLimit, budgetProgress, consolidatedImpact, debtOutstanding, liquidPosition, monthlyCashFlow, monthlyGoalDeadline, monthlyGoalProgress, nextMonthlyOccurrence, nextStatementDueDate, projectedAvailable, statementStatus, totalAvailable, totalSpendable } from './finance';
+import { accountSpendableCents, applyInternalTransfer, availableCardLimit, budgetProgress, consolidatedImpact, creditCardLimitBreakdown, debtOutstanding, liquidPosition, monthlyCashFlow, monthlyGoalDeadline, monthlyGoalProgress, nextMonthlyOccurrence, nextStatementDueDate, projectedAvailable, statementStatus, totalAvailable, totalSpendable } from './finance';
 import type { Account, CreditCard, Transaction } from './types';
 
 const accounts: Account[] = [
@@ -95,6 +95,19 @@ describe('invariantes do household', () => {
     const cards: CreditCard[] = [{ id: 'future', ownerId: 'alberto', name: 'Cartão', limitCents: 150_00, usedCents, closingDay: 25, dueDay: 3 }];
     expect(usedCents).toBe(100_00);
     expect(availableCardLimit(cards)).toBe(50_00);
+  });
+
+  it('explica quando as faturas ultrapassam o limite em vez de esconder o cálculo', () => {
+    expect(creditCardLimitBreakdown(1450_00, 1138_56, [177_95])).toEqual({
+      totalInvoicesCents: 1316_51,
+      availableCents: 133_49,
+      exceededCents: 0,
+    });
+    expect(creditCardLimitBreakdown(1450_00, 1358_56, [177_95])).toEqual({
+      totalInvoicesCents: 1536_51,
+      availableCents: 0,
+      exceededCents: 86_51,
+    });
   });
 
   it('calcula dívida externa sem criar saldo devedor interno', () => {

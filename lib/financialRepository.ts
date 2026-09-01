@@ -117,8 +117,8 @@ export async function fetchFinanceSnapshot(userId: string): Promise<FinanceSnaps
     kind: item.kind,
     amountCents: Number(item.amount_cents),
     description: item.description,
-    category: categoryNames.get(item.category_id) ?? 'Outros',
-    paymentMethod: paymentMethodLabel(item.payment_method, item.payment_method_detail ?? undefined, Number(item.installment_count ?? 1)),
+    category: item.kind === 'card_payment' ? 'Pagamento de cartão' : categoryNames.get(item.category_id) ?? 'Outros',
+    paymentMethod: item.kind === 'card_payment' ? 'Saldo da conta' : paymentMethodLabel(item.payment_method, item.payment_method_detail ?? undefined, Number(item.installment_count ?? 1)),
     paymentMethodDetail: item.payment_method_detail ?? undefined,
     installmentCount: item.kind === 'card_purchase' ? Number(item.installment_count ?? 1) : undefined,
     occurredAt: item.occurred_at,
@@ -126,6 +126,7 @@ export async function fetchFinanceSnapshot(userId: string): Promise<FinanceSnaps
     accountId: item.source_account_id ?? item.destination_account_id ?? undefined,
     destinationAccountId: item.destination_account_id ?? undefined,
     cardId: item.card_id ?? undefined,
+    adjustmentDirection: item.kind === 'adjustment' ? (item.source_account_id ? 'out' : 'in') : undefined,
     syncStatus: 'synced',
   }));
 
@@ -144,18 +145,24 @@ export async function fetchFinanceSnapshot(userId: string): Promise<FinanceSnaps
     ownerId: memberId(memberNames.get(item.owner_id)),
     name: item.name,
     institution: item.institution,
-    type: item.kind === 'cash' ? 'cash' : item.kind === 'wallet' ? 'wallet' : 'checking',
+    type: item.ticket_reload_day ? 'ticket' : item.kind === 'cash' ? 'cash' : item.kind === 'wallet' ? 'wallet' : 'checking',
     balanceCents: Number(item.balance_cents),
     reservedCents: reservedByAccount.get(item.id) ?? 0,
+    expectedReloadDay: item.ticket_reload_day ? Number(item.ticket_reload_day) : undefined,
+    expectedReloadCents: item.ticket_reload_cents ? Number(item.ticket_reload_cents) : undefined,
     active: true,
   }));
   const cards: CreditCard[] = (assertData(cardsResult.data, cardsResult.error) as Array<Record<string, any>>).map((item) => ({
     id: item.id,
     ownerId: memberId(memberNames.get(item.owner_id)),
     name: item.name,
+    institution: item.institution,
     lastFour: item.last_four ?? undefined,
+    approvedLimitCents: Number(item.limit_cents),
+    additionalLimitCents: Number(item.additional_limit_cents),
+    unallocatedUsedCents: Number(item.unallocated_usage_cents ?? 0),
     limitCents: Number(item.limit_cents) + Number(item.additional_limit_cents),
-    usedCents: usedByCard.get(item.id) ?? 0,
+    usedCents: (usedByCard.get(item.id) ?? 0) + Number(item.unallocated_usage_cents ?? 0),
     closingDay: item.closing_day,
     dueDay: item.due_day,
     invoices: (invoicesByCard.get(item.id) ?? []).sort((a: NonNullable<CreditCard['invoices']>[number], b: NonNullable<CreditCard['invoices']>[number]) => a.dueDate.localeCompare(b.dueDate)),
@@ -299,15 +306,15 @@ export async function postOnlineExpense(input: { householdId: string; sourceId: 
   return data as string;
 }
 
-export async function createOnlineAccount(input: { householdId: string; userId: string; name: string; institution: string; type: Account['type']; openingBalanceCents: number }) {
+export async function createOnlineAccount(input: { householdId: string; userId: string; name: string; institution: string; type: Account['type']; openingBalanceCents: number; expectedReloadDay?: number; expectedReloadCents?: number }) {
   if (!supabase) throw new Error('Supabase não configurado.');
-  const { data, error } = await supabase.from('accounts').insert({ household_id: input.householdId, owner_id: input.userId, created_by: input.userId, name: input.name.trim(), institution: input.institution.trim(), kind: input.type, opening_balance_cents: input.openingBalanceCents }).select('id').single();
+  const { data, error } = await supabase.from('accounts').insert({ household_id: input.householdId, owner_id: input.userId, created_by: input.userId, name: input.name.trim(), institution: input.institution.trim(), kind: input.type === 'ticket' ? 'wallet' : input.type, opening_balance_cents: input.openingBalanceCents, ticket_reload_day: input.type === 'ticket' ? input.expectedReloadDay : null, ticket_reload_cents: input.type === 'ticket' ? input.expectedReloadCents : null }).select('id').single();
   if (error) throw new Error('Não foi possível adicionar a conta. Confira os dados e tente novamente.');
   await notifyPartnerActivity(input.householdId, { type: 'account', amountCents: input.openingBalanceCents, description: input.name.trim() });
   return data.id as string;
 }
 
-export async function createOnlineCard(input: { householdId: string; userId: string; name: string; institution: string; lastFour?: string; limitCents: number; currentInvoiceCents: number; futureInvoices: Array<{ month: string; amountCents: number }>; closingDay: number; dueDay: number }) {
+export async function createOnlineCard(input: { householdId: string; userId: string; name: string; institution: string; lastFour?: string; limitCents: number; additionalLimitCents?: number; reportedUsedCents?: number; currentInvoiceCents: number; futureInvoices: Array<{ month: string; amountCents: number }>; closingDay: number; dueDay: number }) {
   if (!supabase) throw new Error('Supabase não configurado.');
   const { data, error } = await supabase.rpc('create_credit_card_with_current_invoice', {
     target_household: input.householdId,
@@ -319,9 +326,75 @@ export async function createOnlineCard(input: { householdId: string; userId: str
     card_due_day: input.dueDay,
     current_invoice: input.currentInvoiceCents,
     future_invoices: input.futureInvoices,
+    card_additional_limit: input.additionalLimitCents ?? 0,
+    reported_used: input.reportedUsedCents || null,
   });
-  if (error || !data) throw new Error('Não foi possível adicionar o cartão. Confira limite, fatura e datas.');
-  await notifyPartnerActivity(input.householdId, { type: 'card', amountCents: input.limitCents, description: input.name.trim() });
+  if (error || !data) {
+    if (error?.message.includes('invalid_future_invoice')) throw new Error('Uma fatura futura está com mês ou valor inválido.');
+    if (error?.message.includes('invalid_card_data')) throw new Error('O limite usado não pode ultrapassar o limite total do cartão.');
+    throw new Error('Não foi possível adicionar o cartão. Confira limite, fatura e datas.');
+  }
+  await notifyPartnerActivity(input.householdId, { type: 'card', amountCents: input.limitCents + (input.additionalLimitCents ?? 0), description: input.name.trim() });
+  return data as string;
+}
+
+export async function payOnlineCardStatement(input: { householdId: string; statementId: string; accountId: string; amountCents: number; idempotencyKey: string }) {
+  if (!supabase) throw new Error('Supabase não configurado.');
+  const { data, error } = await supabase.rpc('pay_card_statement', {
+    target_household: input.householdId,
+    target_statement: input.statementId,
+    target_account: input.accountId,
+    amount: input.amountCents,
+    paid_at: new Date().toISOString(),
+    request_key: input.idempotencyKey,
+  });
+  if (error || !data) {
+    if (error?.message.includes('insufficient_funds')) throw new Error('Saldo livre insuficiente na conta escolhida.');
+    if (error?.message.includes('payment_exceeds_statement_balance')) throw new Error('O valor é maior que o saldo restante da fatura.');
+    if (error?.message.includes('statement_not_found')) throw new Error('Esta fatura já mudou ou não está mais disponível. Atualize e tente novamente.');
+    throw new Error('Não foi possível pagar a fatura.');
+  }
+  return data as string;
+}
+
+export async function updateOnlineCard(input: { householdId: string; cardId: string; name: string; institution: string; lastFour?: string; limitCents: number; additionalLimitCents?: number; reportedUsedCents?: number; currentInvoiceCents: number; futureInvoices: Array<{ id?: string; month: string; amountCents: number }>; closingDay: number; dueDay: number }) {
+  if (!supabase) throw new Error('Supabase não configurado.');
+  const { data, error } = await supabase.rpc('update_credit_card_financials', {
+    target_household: input.householdId,
+    target_card: input.cardId,
+    card_name: input.name.trim(),
+    card_institution: input.institution.trim(),
+    card_last_four: input.lastFour || null,
+    card_limit: input.limitCents,
+    card_additional_limit: input.additionalLimitCents ?? 0,
+    reported_used: input.reportedUsedCents || null,
+    card_closing_day: input.closingDay,
+    card_due_day: input.dueDay,
+    current_invoice: input.currentInvoiceCents,
+    future_invoices: input.futureInvoices,
+  });
+  if (error || !data) {
+    if (error?.message.includes('statement_has_activity')) throw new Error('Uma fatura com compras ou pagamentos não pode ser removida; deixe o valor correto e salve novamente.');
+    if (error?.message.includes('invalid')) throw new Error('Confira limite, consumo, faturas e datas do cartão.');
+    throw new Error('Não foi possível atualizar o cartão.');
+  }
+  return data as string;
+}
+
+export async function updateOnlineAccount(input: { householdId: string; accountId: string; name: string; institution: string; type: Account['type']; balanceCents: number; expectedReloadDay?: number; expectedReloadCents?: number; idempotencyKey: string }) {
+  if (!supabase) throw new Error('Supabase não configurado.');
+  const { data, error } = await supabase.rpc('update_account_financials', {
+    target_household: input.householdId,
+    target_account: input.accountId,
+    account_name: input.name.trim(),
+    account_institution: input.institution.trim(),
+    account_kind: input.type === 'ticket' ? 'wallet' : input.type,
+    target_balance: input.balanceCents,
+    reload_day: input.type === 'ticket' ? input.expectedReloadDay : null,
+    reload_cents: input.type === 'ticket' ? input.expectedReloadCents : null,
+    request_key: input.idempotencyKey,
+  });
+  if (error || !data) throw new Error('Não foi possível atualizar a conta e o saldo.');
   return data as string;
 }
 

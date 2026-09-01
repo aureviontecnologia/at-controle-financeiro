@@ -19,9 +19,11 @@ export type Account = {
   ownerId: MemberId;
   name: string;
   institution: string;
-  type: 'checking' | 'wallet' | 'cash';
+  type: 'checking' | 'wallet' | 'cash' | 'ticket';
   balanceCents: number;
   reservedCents?: number;
+  expectedReloadDay?: number;
+  expectedReloadCents?: number;
   active: boolean;
 };
 
@@ -38,7 +40,11 @@ export type CreditCard = {
   id: string;
   ownerId: MemberId;
   name: string;
+  institution?: string;
   lastFour?: string;
+  approvedLimitCents?: number;
+  additionalLimitCents?: number;
+  unallocatedUsedCents?: number;
   limitCents: number;
   usedCents: number;
   closingDay: number;
@@ -77,6 +83,7 @@ export type Transaction = {
   accountId?: string;
   destinationAccountId?: string;
   cardId?: string;
+  adjustmentDirection?: 'in' | 'out';
   syncStatus: SyncStatus;
 };
 

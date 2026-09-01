@@ -2,24 +2,25 @@ import { describe, expect, it } from 'vitest';
 
 import { availableCardCents, balanceAfterExpense, databasePaymentMethod, normalizeInstallments, paymentMethodDetail, paymentMethodLabel, paymentMethods, sourcesForPayment, splitInstallmentAmounts } from './payment';
 
-const account = (id: string, type: 'checking' | 'wallet' | 'cash') => ({ id, type, ownerId: 'alberto' as const, name: id, institution: id, balanceCents: 0, active: true });
+const account = (id: string, type: 'checking' | 'wallet' | 'cash' | 'ticket') => ({ id, type, ownerId: 'alberto' as const, name: id, institution: id, balanceCents: 0, active: true });
 const card = { id: 'card', ownerId: 'alberto' as const, name: 'Cartão', limitCents: 10000, usedCents: 0, closingDay: 1, dueDay: 10 };
 
 describe('formas de pagamento', () => {
   it('mostra apenas cartões no crédito e apenas dinheiro no pagamento em espécie', () => {
-    const accounts = [account('bank', 'checking'), account('cash', 'cash')];
+    const accounts = [account('bank', 'checking'), account('cash', 'cash'), account('meal', 'ticket')];
     expect(sourcesForPayment('credit_card', accounts, [card]).map((item) => item.id)).toEqual(['card']);
     expect(sourcesForPayment('cash', accounts, [card]).map((item) => item.id)).toEqual(['cash']);
     expect(sourcesForPayment('pix', accounts, [card]).map((item) => item.id)).toEqual(['bank']);
-    expect(sourcesForPayment('other', accounts, [card]).map((item) => item.id)).toEqual(['bank', 'cash']);
+    expect(sourcesForPayment('other', accounts, [card]).map((item) => item.id)).toEqual(['bank', 'cash', 'meal']);
   });
 
   it('mantém todas as formas ligadas à origem financeira correta', () => {
-    const accounts = [account('bank', 'checking'), account('cash', 'cash')];
+    const accounts = [account('bank', 'checking'), account('cash', 'cash'), account('meal', 'ticket')];
     expect(paymentMethods.map((item) => item.id)).toEqual(['pix', 'credit_card', 'debit_card', 'cash', 'transfer', 'bank_slip', 'ticket', 'other']);
-    for (const method of ['pix', 'debit_card', 'transfer', 'bank_slip', 'ticket'] as const) {
+    for (const method of ['pix', 'debit_card', 'transfer', 'bank_slip'] as const) {
       expect(sourcesForPayment(method, accounts, [card]).map((item) => item.id)).toEqual(['bank']);
     }
+    expect(sourcesForPayment('ticket', accounts, [card]).map((item) => item.id)).toEqual(['meal']);
   });
 
   it('descreve parcelas e forma personalizada sem perder o método principal', () => {

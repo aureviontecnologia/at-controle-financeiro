@@ -1,4 +1,4 @@
-import { paymentMethodLabel, type PaymentMethodId } from './payment';
+import { databasePaymentMethod, paymentMethodDetail, paymentMethodLabel, type PaymentMethodId } from './payment';
 import type { Account, Budget, CreditCard, ExternalDebt, HouseholdMember, MemberId, MonthlyGoal, SavingsPot, Transaction, UpcomingExpense } from './types';
 import { supabase } from './supabase';
 import { notifyPartnerActivity } from './notifications';
@@ -213,14 +213,15 @@ export async function fetchFinanceSnapshot(userId: string): Promise<FinanceSnaps
 
 export async function createOnlineScheduledExpense(input: { householdId: string; userId: string; title: string; amountCents: number; dueDate: string; recurring: boolean; paymentMethod: PaymentMethodId; paymentMethodDetail?: string; sourceId?: string; sourceKind?: 'account' | 'card' }) {
   if (!supabase) throw new Error('Supabase não configurado.');
+  const methodDetail = paymentMethodDetail(input.paymentMethod, input.paymentMethodDetail);
   const { data, error } = await supabase.from('scheduled_expenses').insert({
     household_id: input.householdId,
     title: input.title.trim(),
     amount_cents: input.amountCents,
     due_date: input.dueDate,
     recurrence_rule: input.recurring ? 'FREQ=MONTHLY' : null,
-    payment_method: input.paymentMethod,
-    payment_method_detail: input.paymentMethodDetail?.trim() || null,
+    payment_method: databasePaymentMethod(input.paymentMethod),
+    payment_method_detail: methodDetail ?? null,
     default_account_id: input.sourceKind === 'account' ? input.sourceId : null,
     default_card_id: input.sourceKind === 'card' ? input.sourceId : null,
     created_by: input.userId,
@@ -232,13 +233,14 @@ export async function createOnlineScheduledExpense(input: { householdId: string;
 
 export async function payOnlineScheduledExpense(input: { householdId: string; scheduleId: string; sourceId: string; sourceKind: 'account' | 'card'; paymentMethod: PaymentMethodId; paymentMethodDetail?: string; amountCents: number; description: string; idempotencyKey: string }) {
   if (!supabase) throw new Error('Supabase não configurado.');
+  const methodDetail = paymentMethodDetail(input.paymentMethod, input.paymentMethodDetail);
   const { data, error } = await supabase.rpc('pay_scheduled_expense', {
     target_household: input.householdId,
     target_schedule: input.scheduleId,
     target_source: input.sourceId,
     source_kind: input.sourceKind,
-    method: input.paymentMethod,
-    method_detail: input.paymentMethodDetail?.trim() || null,
+    method: databasePaymentMethod(input.paymentMethod),
+    method_detail: methodDetail ?? null,
     paid_at: new Date().toISOString(),
     request_key: input.idempotencyKey,
   });
@@ -271,23 +273,24 @@ export async function adjustOnlineSavingsPot(input: { householdId: string; potId
 
 export async function postOnlineExpense(input: { householdId: string; sourceId: string; sourceKind: 'account' | 'card'; amountCents: number; description: string; occurredAt: string; idempotencyKey: string; category: string; paymentMethod: PaymentMethodId; paymentMethodDetail?: string; installmentCount?: number }) {
   if (!supabase) throw new Error('Supabase não configurado.');
+  const methodDetail = paymentMethodDetail(input.paymentMethod, input.paymentMethodDetail);
   const categoryResult = await supabase.from('categories').select('id').eq('household_id', input.householdId).eq('name', input.category).is('archived_at', null).limit(1).maybeSingle();
   if (categoryResult.error) throw new Error('Não foi possível localizar a categoria.');
   const categoryId = categoryResult.data?.id ?? null;
   const functionName = input.sourceKind === 'card' ? 'post_card_purchase_detailed' : 'post_expense';
   const params = input.sourceKind === 'card'
-    ? { target_household: input.householdId, target_card: input.sourceId, amount: input.amountCents, item_description: input.description, purchased_at: input.occurredAt, request_key: input.idempotencyKey, target_category: categoryId, method_detail: input.paymentMethodDetail?.trim() || null, installments: Math.max(1, input.installmentCount ?? 1) }
-    : { target_household: input.householdId, target_account: input.sourceId, amount: input.amountCents, item_description: input.description, paid_at: input.occurredAt, method: input.paymentMethod, request_key: input.idempotencyKey, target_category: categoryId };
+    ? { target_household: input.householdId, target_card: input.sourceId, amount: input.amountCents, item_description: input.description, purchased_at: input.occurredAt, request_key: input.idempotencyKey, target_category: categoryId, method_detail: methodDetail ?? null, installments: Math.max(1, input.installmentCount ?? 1) }
+    : { target_household: input.householdId, target_account: input.sourceId, amount: input.amountCents, item_description: input.description, paid_at: input.occurredAt, method: databasePaymentMethod(input.paymentMethod), request_key: input.idempotencyKey, target_category: categoryId };
   const { data, error } = await supabase.rpc(functionName, params);
   if (error) {
     if (error.message.includes('card_limit_exceeded')) throw new Error('Limite insuficiente neste cartão.');
     if (error.message.includes('insufficient_funds')) throw new Error('Saldo insuficiente nesta conta.');
     throw new Error(error.message.includes('duplicate') ? 'Essa movimentação já foi registrada.' : 'Não foi possível salvar a movimentação.');
   }
-  if (input.sourceKind !== 'card' && data && input.paymentMethodDetail?.trim()) {
+  if (input.sourceKind !== 'card' && data && methodDetail) {
     const detailsResult = await supabase.rpc('set_transaction_payment_details', {
       target_transaction: data,
-      method_detail: input.paymentMethodDetail?.trim() || null,
+      method_detail: methodDetail,
       installments: 1,
     });
     if (detailsResult.error) throw new Error('O gasto foi salvo, mas os detalhes do pagamento não puderam ser registrados. Atualize os dados antes de tentar novamente.');

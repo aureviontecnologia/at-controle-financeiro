@@ -82,6 +82,7 @@ function notificationCopy(actor, event) {
     card: [`Cartão adicionado por ${actor}`, `${actor} adicionou ${detail} com limite de ${amount}`],
     goal: [`Meta atualizada por ${actor}`, `${actor} definiu a meta em ${amount} · ${detail}`],
     scheduled: [`Conta prevista por ${actor}`, `${actor} planejou ${amount} · ${detail}`],
+    daily_limit: [`Limite diário ultrapassado por ${actor}`, `${actor} fez o total diário passar do limite · ${detail}`],
     other: [`Atividade financeira de ${actor}`, `${actor} registrou ${amount} · ${detail}`],
   };
   const [title, body] = copies[event.type] ?? copies.other;
@@ -154,7 +155,7 @@ async function handlePushApi(request, env) {
 
   if (url.pathname === '/api/push/dispatch') {
     const event = { type: cleanText(body?.event?.type, 20), amountCents: Number(body?.event?.amountCents), description: cleanText(body?.event?.description, 160) };
-    if (!['expense', 'income', 'transfer', 'account', 'card', 'goal', 'scheduled', 'other'].includes(event.type) || !Number.isSafeInteger(event.amountCents) || event.amountCents < 0 || event.amountCents > 1_000_000_000_000) return apiResponse({ error: 'invalid_event' }, 400, origin);
+    if (!['expense', 'income', 'transfer', 'account', 'card', 'goal', 'scheduled', 'daily_limit', 'other'].includes(event.type) || !Number.isSafeInteger(event.amountCents) || event.amountCents < 0 || event.amountCents > 1_000_000_000_000) return apiResponse({ error: 'invalid_event' }, 400, origin);
     const minuteBucket = new Date().toISOString().slice(0, 16);
     await env.PUSH_DB.prepare('insert into push_dispatch_rate(user_id, minute_bucket, request_count) values(?, ?, 1) on conflict(user_id, minute_bucket) do update set request_count = request_count + 1').bind(auth.id, minuteBucket).run();
     const dispatchRate = await env.PUSH_DB.prepare('select request_count from push_dispatch_rate where user_id = ? and minute_bucket = ?').bind(auth.id, minuteBucket).first();

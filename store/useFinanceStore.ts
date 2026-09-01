@@ -83,6 +83,9 @@ type FinanceState = {
   addExpense: (expense: AddExpense) => { created: boolean };
   addAccount: (account: Omit<Account, 'id' | 'active'>) => Account;
   addCard: (card: Omit<CreditCard, 'id'>) => CreditCard;
+  updateCard: (id: string, card: Omit<CreditCard, 'id' | 'ownerId'>) => void;
+  updateAccount: (id: string, account: Omit<Account, 'id' | 'ownerId' | 'active'>, createdBy: 'alberto' | 'thauane', idempotencyKey: string) => void;
+  payCardStatement: (input: { cardId: string; statementId: string; accountId: string; amountCents: number; createdBy: 'alberto' | 'thauane'; idempotencyKey: string }) => void;
   addScheduledExpense: (expense: Omit<UpcomingExpense, 'id' | 'paid'>) => UpcomingExpense;
   markScheduledPaid: (id: string) => void;
   addSavingsPot: (pot: Omit<SavingsPot, 'id' | 'updatedAt'>) => SavingsPot;
@@ -152,6 +155,63 @@ export const useFinanceStore = create<FinanceState>()(
         const card: CreditCard = { ...input, id: `local-card-${Date.now()}` };
         set((state) => ({ cards: [...state.cards, card] }));
         return card;
+      },
+      updateCard: (id, card) => set((state) => ({ cards: state.cards.map((item) => item.id === id ? { ...item, ...card } : item) })),
+      updateAccount: (id, account, createdBy, idempotencyKey) => {
+        const previous = get().accounts.find((item) => item.id === id);
+        if (!previous) throw new Error('Conta não encontrada.');
+        const delta = account.balanceCents - previous.balanceCents;
+        const adjustment: Transaction | null = delta === 0 ? null : {
+          id: idempotencyKey,
+          idempotencyKey,
+          kind: 'adjustment',
+          amountCents: Math.abs(delta),
+          description: `Ajuste de saldo em ${account.name}`,
+          category: 'Ajuste de saldo',
+          paymentMethod: 'Ajuste manual',
+          occurredAt: new Date().toISOString(),
+          createdBy,
+          accountId: id,
+          adjustmentDirection: delta < 0 ? 'out' : 'in',
+          syncStatus: 'synced',
+        };
+        set((state) => ({
+          accounts: state.accounts.map((item) => item.id === id ? { ...item, ...account } : item),
+          transactions: adjustment ? [adjustment, ...state.transactions] : state.transactions,
+        }));
+      },
+      payCardStatement: (input) => {
+        if (get().transactions.some((transaction) => transaction.idempotencyKey === input.idempotencyKey)) return;
+        const card = get().cards.find((item) => item.id === input.cardId);
+        const invoice = card?.invoices?.find((item) => item.id === input.statementId);
+        const account = get().accounts.find((item) => item.id === input.accountId);
+        if (!card || !invoice || !account) throw new Error('Selecione uma fatura e uma conta válidas.');
+        if (input.amountCents <= 0 || input.amountCents > invoice.amountCents) throw new Error('Informe um valor válido para a fatura.');
+        if (account.balanceCents - (account.reservedCents ?? 0) < input.amountCents) throw new Error('Saldo livre insuficiente.');
+        const remainingCents = invoice.amountCents - input.amountCents;
+        const transaction: Transaction = {
+          id: input.idempotencyKey,
+          idempotencyKey: input.idempotencyKey,
+          kind: 'card_payment',
+          amountCents: input.amountCents,
+          description: `Pagamento da fatura ${card.name}`,
+          category: 'Pagamento de cartão',
+          paymentMethod: `Saldo de ${account.name}`,
+          occurredAt: new Date().toISOString(),
+          createdBy: input.createdBy,
+          accountId: account.id,
+          cardId: card.id,
+          syncStatus: 'synced',
+        };
+        set((state) => ({
+          transactions: [transaction, ...state.transactions],
+          accounts: state.accounts.map((item) => item.id === account.id ? { ...item, balanceCents: item.balanceCents - input.amountCents } : item),
+          cards: state.cards.map((item) => item.id !== card.id ? item : {
+            ...item,
+            usedCents: Math.max(0, item.usedCents - input.amountCents),
+            invoices: item.invoices?.map((entry) => entry.id !== invoice.id ? entry : { ...entry, amountCents: remainingCents, status: remainingCents === 0 ? 'paid' : 'partially_paid' }),
+          }),
+        }));
       },
       addScheduledExpense: (input) => {
         const expense: UpcomingExpense = { ...input, id: `local-schedule-${Date.now()}`, paid: false };

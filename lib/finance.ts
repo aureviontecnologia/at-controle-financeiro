@@ -42,15 +42,38 @@ export function creditCardLimitBreakdown(
   limitCents: number,
   currentInvoiceCents: number,
   futureInvoiceCents: number[],
+  options: { additionalLimitCents?: number; reportedUsedCents?: number } = {},
 ) {
   const totalInvoicesCents = Math.max(0, currentInvoiceCents)
     + futureInvoiceCents.reduce((sum, value) => sum + Math.max(0, value), 0);
-  const balanceCents = Math.max(0, limitCents) - totalInvoicesCents;
+  const effectiveLimitCents = Math.max(0, limitCents) + Math.max(0, options.additionalLimitCents ?? 0);
+  const totalUsedCents = Math.max(totalInvoicesCents, Math.max(0, options.reportedUsedCents ?? 0));
+  const unallocatedUsedCents = Math.max(0, totalUsedCents - totalInvoicesCents);
+  const balanceCents = effectiveLimitCents - totalUsedCents;
 
   return {
+    effectiveLimitCents,
     totalInvoicesCents,
+    totalUsedCents,
+    unallocatedUsedCents,
     availableCents: Math.max(0, balanceCents),
     exceededCents: Math.max(0, -balanceCents),
+  };
+}
+
+export function normalizeFutureInvoiceMonth(value: string, referenceDate = new Date()) {
+  const match = value.match(/^(0[1-9]|1[0-2])\/(20\d{2})$/);
+  if (!match) return null;
+  const month = Number(match[1]);
+  let year = Number(match[2]);
+  const currentYear = referenceDate.getFullYear();
+  const currentMonth = referenceDate.getMonth() + 1;
+  while (year < currentYear || (year === currentYear && month <= currentMonth)) year += 1;
+  const normalizedLabel = `${String(month).padStart(2, '0')}/${year}`;
+  return {
+    date: `${year}-${String(month).padStart(2, '0')}-01`,
+    label: normalizedLabel,
+    adjusted: normalizedLabel !== value,
   };
 }
 

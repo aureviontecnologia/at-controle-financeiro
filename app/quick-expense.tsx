@@ -54,6 +54,8 @@ export default function QuickExpenseScreen() {
   function selectMethod(method: PaymentMethodId) {
     Keyboard.dismiss();
     setPaymentMethod(method);
+    if (method === 'ticket') setPaymentDetail('Ticket');
+    else if (paymentMethod === 'ticket') setPaymentDetail('');
     if (method !== 'credit_card') setInstallmentCount(1);
     setStep('main');
   }

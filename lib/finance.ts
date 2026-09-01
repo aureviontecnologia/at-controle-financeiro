@@ -38,6 +38,22 @@ export function availableCardLimit(cards: CreditCard[]) {
   return Math.max(0, totalCardLimit(cards) - totalCardUsage(cards));
 }
 
+export function creditCardLimitBreakdown(
+  limitCents: number,
+  currentInvoiceCents: number,
+  futureInvoiceCents: number[],
+) {
+  const totalInvoicesCents = Math.max(0, currentInvoiceCents)
+    + futureInvoiceCents.reduce((sum, value) => sum + Math.max(0, value), 0);
+  const balanceCents = Math.max(0, limitCents) - totalInvoicesCents;
+
+  return {
+    totalInvoicesCents,
+    availableCents: Math.max(0, balanceCents),
+    exceededCents: Math.max(0, -balanceCents),
+  };
+}
+
 function monthKey(date: Date) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Sao_Paulo',

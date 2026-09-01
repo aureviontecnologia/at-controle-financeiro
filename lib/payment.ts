@@ -17,7 +17,8 @@ export const paymentMethods: Array<{ id: PaymentMethodId; name: string; detail: 
 export function sourcesForPayment(method: PaymentMethodId, accounts: Account[], cards: CreditCard[]) {
   if (method === 'credit_card') return cards.map((item) => ({ ...item, sourceKind: 'card' as const }));
   if (method === 'cash') return accounts.filter((item) => item.type === 'cash').map((item) => ({ ...item, sourceKind: 'account' as const }));
-  const eligibleAccounts = method === 'other' ? accounts : accounts.filter((item) => item.type !== 'cash');
+  if (method === 'ticket') return accounts.filter((item) => item.type === 'ticket').map((item) => ({ ...item, sourceKind: 'account' as const }));
+  const eligibleAccounts = method === 'other' ? accounts : accounts.filter((item) => item.type !== 'cash' && item.type !== 'ticket');
   return eligibleAccounts.map((item) => ({ ...item, sourceKind: 'account' as const }));
 }
 

@@ -52,7 +52,7 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-  card_id uuid;
+  created_card_id uuid;
   statement_dates record;
   invoice jsonb;
   invoice_month date;
@@ -85,7 +85,7 @@ begin
     target_household, auth.uid(), trim(card_name), trim(card_institution),
     nullif(trim(card_last_four), ''), card_limit, card_closing_day,
     card_due_day, auth.uid()
-  ) returning id into card_id;
+  ) returning id into created_card_id;
 
   if current_invoice > 0 then
     select * into statement_dates
@@ -98,7 +98,7 @@ begin
       household_id, card_id, period_start, period_end, closing_date,
       due_date, opening_balance_cents
     ) values (
-      target_household, card_id, statement_dates.period_start,
+      target_household, created_card_id, statement_dates.period_start,
       statement_dates.period_end, statement_dates.closing_date,
       statement_dates.due_date, current_invoice
     );
@@ -126,7 +126,7 @@ begin
       household_id, card_id, period_start, period_end, closing_date,
       due_date, opening_balance_cents
     ) values (
-      target_household, card_id,
+      target_household, created_card_id,
       ((invoice_close - interval '1 month')::date + 1), invoice_close,
       invoice_close, invoice_due, invoice_amount
     )
@@ -135,7 +135,7 @@ begin
           updated_at = now();
   end loop;
 
-  return card_id;
+  return created_card_id;
 end;
 $$;
 

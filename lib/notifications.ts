@@ -1,7 +1,11 @@
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
+import { dailyExpenseTotal } from './finance';
+import { formatMoney } from './format';
 import { supabase } from './supabase';
+import type { CreditCard, Transaction, UpcomingExpense } from './types';
 
 const PUSH_API_URL = process.env.EXPO_PUBLIC_PUSH_API_URL ?? 'https://at-controle-financeiro-aurevion.aureviontecnologia.workers.dev';
 const EXPO_PROJECT_ID = process.env.EXPO_PUBLIC_EXPO_PROJECT_ID;
@@ -12,7 +16,7 @@ function nativeNotifications(): typeof import('expo-notifications') {
 }
 
 export type SharedNotificationPermission = 'granted' | 'denied' | 'prompt' | 'unavailable';
-export type PartnerActivity = { type: 'expense' | 'income' | 'transfer' | 'account' | 'card' | 'goal' | 'scheduled' | 'other'; amountCents: number; description: string };
+export type PartnerActivity = { type: 'expense' | 'income' | 'transfer' | 'account' | 'card' | 'goal' | 'scheduled' | 'daily_limit' | 'other'; amountCents: number; description: string };
 
 export function configureSharedNotificationHandler() {
   if (handlerConfigured || Platform.OS === 'web') return;
@@ -138,5 +142,51 @@ export async function notifyPartnerActivity(householdId: string, event: PartnerA
     return Number(result?.delivered ?? 0);
   } catch {
     return 0;
+  }
+}
+
+async function showCurrentDeviceNotification(title: string, body: string, tag: string) {
+  if (Platform.OS === 'web') {
+    if (typeof window === 'undefined' || !('Notification' in window) || window.Notification.permission !== 'granted' || !('serviceWorker' in navigator)) return;
+    const registration = await navigator.serviceWorker.ready;
+    await registration.showNotification(title, { body, icon: '/pwa-192.png', badge: '/pwa-192.png', tag, data: { url: '/' } });
+    return;
+  }
+  const ExpoNotifications = nativeNotifications();
+  configureSharedNotificationHandler();
+  const permission = await ExpoNotifications.getPermissionsAsync();
+  if (!permission.granted) return;
+  await ExpoNotifications.scheduleNotificationAsync({ content: { title, body, sound: 'default', data: { route: '/' } }, trigger: null });
+}
+
+function reminderDaysUntil(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return Number.POSITIVE_INFINITY;
+  const now = new Date();
+  return Math.ceil((new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12).getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12).getTime()) / 86_400_000);
+}
+
+export async function syncFinanceReminders(input: { householdId: string; cards: CreditCard[]; upcoming: UpcomingExpense[]; transactions: Transaction[]; dailySpendLimitCents: number }) {
+  const reminders: Array<{ id: string; title: string; body: string }> = [];
+  for (const expense of input.upcoming) {
+    const days = reminderDaysUntil(expense.dueDate);
+    if (!expense.paid && days >= 0 && days <= 3) reminders.push({ id: `bill-${expense.id}-${days}`, title: days === 0 ? 'Conta vence hoje' : `Conta vence em ${days} dia${days === 1 ? '' : 's'}`, body: `${expense.title} · ${formatMoney(expense.amountCents)}` });
+  }
+  for (const card of input.cards) for (const invoice of card.invoices ?? []) {
+    const days = reminderDaysUntil(invoice.dueDate);
+    if (invoice.status !== 'paid' && days >= 0 && days <= 3) reminders.push({ id: `invoice-${invoice.id}-${days}`, title: days === 0 ? 'Fatura vence hoje' : `Fatura vence em ${days} dia${days === 1 ? '' : 's'}`, body: `${card.name} · ${formatMoney(invoice.amountCents)}` });
+  }
+  const spentToday = dailyExpenseTotal(input.transactions);
+  if (input.dailySpendLimitCents > 0 && spentToday > input.dailySpendLimitCents) reminders.push({ id: `daily-${new Date().toISOString().slice(0, 10)}`, title: 'Limite diário ultrapassado', body: `Gastos de ${formatMoney(spentToday)} excederam o limite em ${formatMoney(spentToday - input.dailySpendLimitCents)}.` });
+
+  for (const reminder of reminders) {
+    const key = `at-reminder:${input.householdId}:${reminder.id}`;
+    if (await AsyncStorage.getItem(key)) continue;
+    try {
+      await showCurrentDeviceNotification(reminder.title, reminder.body, reminder.id);
+      await AsyncStorage.setItem(key, new Date().toISOString());
+    } catch {
+      // Alertas locais complementam os avisos visíveis da tela inicial.
+    }
   }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { accountSpendableCents, applyInternalTransfer, availableCardLimit, budgetProgress, consolidatedImpact, creditCardLimitBreakdown, debtOutstanding, liquidPosition, monthlyCashFlow, monthlyGoalDeadline, monthlyGoalProgress, nextMonthlyOccurrence, nextStatementDueDate, projectedAvailable, statementStatus, totalAvailable, totalSpendable } from './finance';
+import { accountSpendableCents, applyInternalTransfer, availableCardLimit, budgetProgress, consolidatedImpact, creditCardLimitBreakdown, debtOutstanding, liquidPosition, monthlyCashFlow, monthlyGoalDeadline, monthlyGoalProgress, nextMonthlyOccurrence, nextStatementDueDate, normalizeFutureInvoiceMonth, projectedAvailable, statementStatus, totalAvailable, totalSpendable } from './finance';
 import type { Account, CreditCard, Transaction } from './types';
 
 const accounts: Account[] = [
@@ -99,15 +99,38 @@ describe('invariantes do household', () => {
 
   it('explica quando as faturas ultrapassam o limite em vez de esconder o cálculo', () => {
     expect(creditCardLimitBreakdown(1450_00, 1138_56, [177_95])).toEqual({
+      effectiveLimitCents: 1450_00,
       totalInvoicesCents: 1316_51,
+      totalUsedCents: 1316_51,
+      unallocatedUsedCents: 0,
       availableCents: 133_49,
       exceededCents: 0,
     });
     expect(creditCardLimitBreakdown(1450_00, 1358_56, [177_95])).toEqual({
+      effectiveLimitCents: 1450_00,
       totalInvoicesCents: 1536_51,
+      totalUsedCents: 1536_51,
+      unallocatedUsedCents: 0,
       availableCents: 0,
       exceededCents: 86_51,
     });
+  });
+
+  it('reconcilia limite adicional e consumo informado pelo banco', () => {
+    expect(creditCardLimitBreakdown(600_00, 462_04, [63_78, 63_78], { additionalLimitCents: 205_00, reportedUsedCents: 797_00 })).toEqual({
+      effectiveLimitCents: 805_00,
+      totalInvoicesCents: 589_60,
+      totalUsedCents: 797_00,
+      unallocatedUsedCents: 207_40,
+      availableCents: 8_00,
+      exceededCents: 0,
+    });
+  });
+
+  it('corrige ano passado para a próxima ocorrência futura do mesmo mês', () => {
+    expect(normalizeFutureInvoiceMonth('10/2025', new Date(2026, 7, 31))).toEqual({ date: '2026-10-01', label: '10/2026', adjusted: true });
+    expect(normalizeFutureInvoiceMonth('01/2026', new Date(2026, 7, 31))).toEqual({ date: '2027-01-01', label: '01/2027', adjusted: true });
+    expect(normalizeFutureInvoiceMonth('99/2026', new Date(2026, 7, 31))).toBeNull();
   });
 
   it('calcula dívida externa sem criar saldo devedor interno', () => {

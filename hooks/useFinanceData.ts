@@ -41,6 +41,7 @@ function useFinanceDataSource() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `household_id=eq.${householdId}` }, refreshSnapshot)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'card_statements', filter: `household_id=eq.${householdId}` }, refreshSnapshot)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'scheduled_expenses', filter: `household_id=eq.${householdId}` }, refreshSnapshot)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'future_incomes', filter: `household_id=eq.${householdId}` }, refreshSnapshot)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'savings_pots', filter: `household_id=eq.${householdId}` }, refreshSnapshot)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user?.id}` }, refreshSnapshot)
         .subscribe();
@@ -58,10 +59,10 @@ function useFinanceDataSource() {
       { id: 'alberto' as const, userId: 'demo-alberto', name: 'Alberto', initials: 'AL', role: 'owner' as const, joinedAt: new Date().toISOString(), lastSeenAt: user?.memberId === 'alberto' ? new Date().toISOString() : undefined, isCurrent: user?.memberId === 'alberto' },
       { id: 'thauane' as const, userId: 'demo-thauane', name: 'Thauane', initials: 'TH', role: 'member' as const, joinedAt: new Date().toISOString(), lastSeenAt: user?.memberId === 'thauane' ? new Date().toISOString() : undefined, isCurrent: user?.memberId === 'thauane' },
     ];
-    return { householdId: null, accounts: local.accounts, cards: local.cards, transactions: local.transactions, upcoming: local.upcoming, budgets: local.budgets, debts: local.debts, monthlyGoal: local.monthlyGoal, savingsPots: local.savingsPots, dailySpendLimitCents: local.dailySpendLimitCents, notificationsEnabled: local.notificationsEnabled, members, isLoading: false, isRefreshing: false, error: null, errorKind: null, refresh: async () => undefined };
+    return { householdId: null, accounts: local.accounts, cards: local.cards, transactions: local.transactions, upcoming: local.upcoming, budgets: local.budgets, debts: local.debts, monthlyGoal: local.monthlyGoal, savingsPots: local.savingsPots, futureIncomes: local.futureIncomes, dailySpendLimitCents: local.dailySpendLimitCents, notificationsEnabled: local.notificationsEnabled, members, isLoading: false, isRefreshing: false, error: null, errorKind: null, refresh: async () => undefined };
   }
 
-  const empty: Omit<FinanceSnapshot, 'householdId'> = { accounts: [], cards: [], transactions: [], upcoming: [], budgets: [], debts: [], monthlyGoal: null, savingsPots: [], dailySpendLimitCents: 0, notificationsEnabled: true, members: [] };
+  const empty: Omit<FinanceSnapshot, 'householdId'> = { accounts: [], cards: [], transactions: [], upcoming: [], budgets: [], debts: [], monthlyGoal: null, savingsPots: [], futureIncomes: [], dailySpendLimitCents: 0, notificationsEnabled: true, members: [] };
   return { householdId: householdId ?? null, ...(remoteQuery.data ?? empty), isLoading: remoteQuery.isLoading, isRefreshing: remoteQuery.isRefetching, error: remoteQuery.error, errorKind: remoteQuery.error instanceof FinanceDataError ? remoteQuery.error.kind : remoteQuery.error ? 'server' as const : null, refresh: remoteQuery.refetch };
 }
 

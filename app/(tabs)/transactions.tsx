@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   heading: { paddingTop: spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   filterIcon: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   search: { minHeight: 50, backgroundColor: colors.surface, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, gap: spacing.md },
-  searchInput: { flex: 1, color: colors.text, fontFamily: type.regular, fontSize: 15 },
+  searchInput: { flex: 1, minWidth: 0, color: colors.text, fontFamily: type.regular, fontSize: 16 },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   filter: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 14, borderRadius: radii.pill, backgroundColor: colors.surface },
   filterActive: { backgroundColor: colors.mint },

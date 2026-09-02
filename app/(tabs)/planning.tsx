@@ -1,10 +1,10 @@
-import { CalendarDays, CircleDollarSign, Target } from 'lucide-react-native';
+import { CalendarDays, CircleDollarSign, Landmark, Target, Ticket } from 'lucide-react-native';
 import { router, type Href } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText, Divider, EmptyState, Pill, PrimaryButton, Screen, SectionHeader, Surface } from '@/components/ui';
 import { colors, radii, spacing } from '@/constants/theme';
-import { budgetProgress, liquidPosition, monthlyGoalDeadline, monthlyGoalProgress, projectedAvailable } from '@/lib/finance';
+import { budgetProgress, futureIncomeOccurrencesForMonth, liquidPosition, monthlyGoalDeadline, monthlyGoalProgress, projectedAvailable } from '@/lib/finance';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useFinanceData } from '@/hooks/useFinanceData';
 import { useFinanceStore } from '@/store/useFinanceStore';
@@ -12,10 +12,12 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { paymentMethods } from '@/lib/payment';
 
 export default function PlanningScreen() {
-  const { accounts, cards, upcoming, budgets, debts, monthlyGoal } = useFinanceData();
+  const { accounts, cards, upcoming, budgets, debts, monthlyGoal, futureIncomes } = useFinanceData();
   const { palette } = useAppTheme();
   const { hideValues } = useFinanceStore();
-  const projected = projectedAvailable(accounts, upcoming, cards);
+  const expectedThisMonth = futureIncomeOccurrencesForMonth(futureIncomes, new Date());
+  const futureCashCents = expectedThisMonth.filter((item) => item.destinationType === 'account').reduce((sum, item) => sum + item.amountCents, 0);
+  const projected = projectedAvailable(accounts, upcoming, cards) + futureCashCents;
   const upcomingTotal = upcoming.filter((item) => !item.paid).reduce((sum, item) => sum + item.amountCents, 0);
   const debtTotal = debts.reduce((sum, item) => sum + item.outstandingCents, 0);
   const goalPosition = Math.max(0, liquidPosition(accounts, cards, debts));
@@ -27,9 +29,17 @@ export default function PlanningScreen() {
       <Surface style={styles.projection}>
         <View style={styles.projectionTop}><View style={[styles.projectionIcon, { backgroundColor: palette.amberDeep }]}><Target size={20} color={palette.amber} /></View><Pill tone="amber">PROJEÇÃO DO CASAL</Pill></View>
         <AppText variant="display" style={styles.projectionValue}>{formatMoney(projected, hideValues)}</AppText>
-        <AppText variant="bodyMuted">após faturas e contas já previstas</AppText>
-        <View style={[styles.commitments, { borderTopColor: palette.line }]}><View><AppText variant="caption">CONTAS FUTURAS</AppText><AppText variant="mono">{formatMoney(upcomingTotal, hideValues)}</AppText></View>{debtTotal > 0 ? <View><AppText variant="caption">COMPROMISSOS EXTERNOS</AppText><AppText variant="mono">{formatMoney(debtTotal, hideValues)}</AppText></View> : null}</View>
+        <AppText variant="bodyMuted">após entradas esperadas, faturas e contas já previstas</AppText>
+        <View style={[styles.commitments, { borderTopColor: palette.line }]}><View><AppText variant="caption">ENTRADAS FUTURAS</AppText><AppText variant="mono">+{formatMoney(futureCashCents, hideValues)}</AppText></View><View><AppText variant="caption">CONTAS FUTURAS</AppText><AppText variant="mono">{formatMoney(upcomingTotal, hideValues)}</AppText></View>{debtTotal > 0 ? <View><AppText variant="caption">COMPROMISSOS EXTERNOS</AppText><AppText variant="mono">{formatMoney(debtTotal, hideValues)}</AppText></View> : null}</View>
       </Surface>
+
+      <View style={styles.section}>
+        <SectionHeader title="Salários e entradas futuras" />
+        <PrimaryButton label="Adicionar salário ou entrada" onPress={() => router.push('/future-income' as Href)} />
+        <Surface style={styles.stack}>
+          {futureIncomes.length ? futureIncomes.map((item, index) => <View key={item.id}>{index ? <Divider /> : null}<Pressable accessibilityRole="button" onPress={() => router.push(`/future-income?id=${encodeURIComponent(item.id)}` as Href)} style={({ pressed }) => [styles.itemRow, pressed && styles.pressed]}><View style={[styles.itemIcon, { backgroundColor: item.destinationType === 'ticket' ? palette.amberDeep : palette.mintDeep }]}>{item.destinationType === 'ticket' ? <Ticket size={18} color={palette.amber} /> : <Landmark size={18} color={palette.mint} />}</View><View style={styles.itemCopy}><AppText variant="body">{item.title}</AppText><AppText variant="caption">{item.ownerId === 'alberto' ? 'Alberto' : 'Thauane'} · {item.recurrence === 'monthly' ? 'todo mês a partir de ' : 'previsto para '}{formatDate(item.expectedDate)}</AppText></View><View style={styles.itemRight}><Pill tone={item.destinationType === 'ticket' ? 'amber' : 'mint'}>{item.destinationType === 'ticket' ? 'TICKET' : 'SALDO'}</Pill><AppText variant="mono" style={styles.smallMoney}>{formatMoney(item.amountCents, hideValues)}</AppText></View></Pressable></View>) : <EmptyState title="Nenhuma entrada futura" description="Adicione salários, pagamentos esperados ou créditos futuros sem alterar o saldo real." />}
+        </Surface>
+      </View>
 
       <View style={styles.section}>
         <SectionHeader title="Meta do mês" action={monthlyGoal ? 'EDITAR' : 'CRIAR'} onAction={() => router.push('/monthly-goal' as Href)} />
@@ -73,7 +83,7 @@ const styles = StyleSheet.create({
   projectionTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   projectionIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.amberDeep, alignItems: 'center', justifyContent: 'center' },
   projectionValue: { marginTop: spacing.md },
-  commitments: { flexDirection: 'row', gap: spacing.xl, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, paddingTop: spacing.lg, marginTop: spacing.md },
+  commitments: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xl, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, paddingTop: spacing.lg, marginTop: spacing.md },
   section: { gap: spacing.md },
   goalCard: { gap: spacing.md },
   goalTrack: { height: 8 },

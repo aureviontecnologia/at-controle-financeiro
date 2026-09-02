@@ -1,5 +1,5 @@
 import { router, type Href } from 'expo-router';
-import { ArrowRight, Bell, CalendarClock, ChevronLeft, ChevronRight, CreditCard, Gauge, ReceiptText, Sparkles, Ticket } from 'lucide-react-native';
+import { ArrowRight, Bell, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, CircleDollarSign, CreditCard, Gauge, ReceiptText, Sparkles, Ticket, TriangleAlert } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -9,7 +9,7 @@ import { SyncRetry } from '@/components/SyncRetry';
 import { TransactionRow } from '@/components/TransactionRow';
 import { AppText, Divider, EmptyState, Pill, Screen, SectionHeader, Surface } from '@/components/ui';
 import { colors, radii, spacing } from '@/constants/theme';
-import { availableByOwner, availableCardLimit, cardInvoicesForMonth, dailyExpenseTotal, financeMonthKey, monthlyCashFlow, statementClosingDate, ticketByOwner, totalAvailable, totalTicketBalance } from '@/lib/finance';
+import { availableByOwner, availableCardLimit, cardInvoicesForMonth, dailyExpenseTotal, expectedTicketReloadForMonth, financeMonthKey, futureIncomeOccurrencesForMonth, monthlyCashFlow, monthlySolvency, statementClosingDate, ticketByOwner, totalAvailable, totalSpendable, totalTicketBalance } from '@/lib/finance';
 import { formatCompactMoney, formatDate, formatMoney } from '@/lib/format';
 import { useFinanceData } from '@/hooks/useFinanceData';
 import { useAuth } from '@/providers/AuthProvider';
@@ -28,11 +28,12 @@ function daysUntil(value: string) {
 export default function HomeScreen() {
   const { user } = useAuth();
   const { palette, strawberryEnabled } = useAppTheme();
-  const { accounts, cards, transactions, upcoming, budgets, debts, dailySpendLimitCents, isLoading, isRefreshing, error, errorKind, refresh } = useFinanceData();
+  const { accounts, cards, transactions, upcoming, budgets, debts, futureIncomes, dailySpendLimitCents, isLoading, isRefreshing, error, errorKind, refresh } = useFinanceData();
   const { hideValues, setHideValues } = useFinanceStore();
   const [selectedMonth, setSelectedMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1, 12));
   const [showAlerts, setShowAlerts] = useState(false);
   const available = totalAvailable(accounts);
+  const spendable = totalSpendable(accounts);
   const byOwner = availableByOwner(accounts);
   const ticketTotal = totalTicketBalance(accounts);
   const ticketsByOwner = ticketByOwner(accounts);
@@ -40,8 +41,21 @@ export default function HomeScreen() {
   const monthInvoices = cardInvoicesForMonth(cards, selectedMonth);
   const cardTotal = monthInvoices.reduce((sum, item) => sum + item.amountCents, 0);
   const monthUpcoming = upcoming.filter((item) => !item.paid && financeMonthKey(item.dueDate) === selectedKey);
-  const upcomingTotal = monthUpcoming.reduce((sum, item) => sum + item.amountCents, 0);
-  const projected = available - cardTotal - upcomingTotal;
+  const ticketUpcoming = monthUpcoming.filter((item) => item.paymentMethod === 'ticket' || (item.paymentMethod === 'other' && item.paymentMethodDetail?.trim().toLocaleLowerCase('pt-BR') === 'ticket'));
+  const regularUpcoming = monthUpcoming.filter((item) => !ticketUpcoming.some((ticketItem) => ticketItem.id === item.id));
+  const expectedIncomes = futureIncomeOccurrencesForMonth(futureIncomes, selectedMonth);
+  const expectedCash = expectedIncomes.filter((item) => item.destinationType === 'account').reduce((sum, item) => sum + item.amountCents, 0);
+  const expectedTicketIncome = expectedIncomes.filter((item) => item.destinationType === 'ticket').reduce((sum, item) => sum + item.amountCents, 0);
+  const expectedTicketReload = expectedTicketReloadForMonth(accounts, selectedMonth);
+  const ticketExpenses = ticketUpcoming.reduce((sum, item) => sum + item.amountCents, 0);
+  const ticketFuture = ticketTotal + expectedTicketIncome + expectedTicketReload - ticketExpenses;
+  const projectionEvents = [
+    ...expectedIncomes.filter((item) => item.destinationType === 'account').map((item) => ({ id: item.id, date: item.occurrenceDate, amountCents: item.amountCents, kind: 'income' as const, label: item.title })),
+    ...monthInvoices.map((item) => ({ id: item.id, date: item.dueDate, amountCents: item.amountCents, kind: 'obligation' as const, label: `Fatura ${item.cardName}` })),
+    ...regularUpcoming.map((item) => ({ id: item.id, date: item.dueDate, amountCents: item.amountCents, kind: 'obligation' as const, label: item.title })),
+  ];
+  const solvency = monthlySolvency(spendable, projectionEvents);
+  const projected = available + expectedCash - cardTotal - regularUpcoming.reduce((sum, item) => sum + item.amountCents, 0);
   const flow = monthlyCashFlow(transactions, selectedMonth);
   const cardAvailable = availableCardLimit(cards);
   const externalDebtTotal = debts.reduce((sum, item) => sum + item.outstandingCents, 0);
@@ -92,6 +106,19 @@ export default function HomeScreen() {
 
       {ticketTotal > 0 ? <Surface style={styles.ticketBalance}><View style={[styles.insightIcon, { backgroundColor: palette.amberDeep }]}><Ticket size={19} color={palette.amber} /></View><View style={styles.insightCopy}><AppText variant="label">SALDO EM TICKET · SEPARADO</AppText><AppText variant="section">{formatMoney(ticketTotal, hideValues)}</AppText><AppText variant="caption">Alberto {formatMoney(ticketsByOwner.alberto, hideValues)} · Thauane {formatMoney(ticketsByOwner.thauane, hideValues)}. Não entra no patrimônio e não cobre faturas.</AppText></View></Surface> : null}
 
+      <Surface style={styles.futureCard}>
+        <View style={styles.futureHead}><View style={[styles.insightIcon, { backgroundColor: solvency.canPayAllOnTime ? palette.mintDeep : palette.dangerDeep }]}>{solvency.canPayAllOnTime ? <CheckCircle2 size={20} color={palette.mint} /> : <TriangleAlert size={20} color={palette.danger} />}</View><View style={styles.futureTitle}><AppText variant="label">FUTURO DE {monthLabel.toUpperCase()}</AppText><AppText variant="section">{solvency.canPayAllOnTime ? 'Dá para pagar tudo até o vencimento' : 'Pode faltar saldo antes de um vencimento'}</AppText></View></View>
+        <View style={styles.futureBalance}><AppText variant="caption">PATRIMÔNIO COMUM PROJETADO</AppText><AppText variant="display" numberOfLines={1} style={[styles.projectedFutureValue, { color: projected >= 0 ? palette.mint : palette.danger }]}>{formatMoney(projected, hideValues)}</AppText></View>
+        <Divider />
+        <View style={styles.forecastRow}><AppText variant="bodyMuted" style={styles.forecastLabel}>Saldo comum atual</AppText><AppText variant="mono" style={styles.forecastValue}>{formatMoney(available, hideValues)}</AppText></View>
+        <View style={styles.forecastRow}><AppText variant="bodyMuted" style={styles.forecastLabel}>Livre para vencimentos</AppText><AppText variant="mono" style={styles.forecastValue}>{formatMoney(spendable, hideValues)}</AppText></View>
+        <View style={styles.forecastRow}><AppText variant="bodyMuted" style={styles.forecastLabel}>Salários e entradas esperadas</AppText><AppText variant="mono" style={[styles.forecastValue, { color: palette.mint }]}>+{formatMoney(expectedCash, hideValues)}</AppText></View>
+        <View style={styles.forecastRow}><AppText variant="bodyMuted" style={styles.forecastLabel}>Faturas e contas do mês</AppText><AppText variant="mono" style={styles.forecastValue}>−{formatMoney(cardTotal + regularUpcoming.reduce((sum, item) => sum + item.amountCents, 0), hideValues)}</AppText></View>
+        {solvency.firstShortfall ? <View style={[styles.solvencyWarning, { backgroundColor: palette.dangerDeep }]}><AppText variant="body" style={{ color: palette.danger }}>Faltariam {formatMoney(solvency.shortfallCents, hideValues)} antes de pagar “{solvency.firstShortfall.label}” em {formatDate(solvency.firstShortfall.date)}.</AppText></View> : <AppText variant="caption">A conferência respeita a data de cada salário, conta e fatura; não olha apenas a sobra no fim do mês.</AppText>}
+        <View style={[styles.ticketForecast, { borderColor: palette.lineSoft }]}><Ticket size={19} color={palette.amber} /><View style={styles.ticketForecastCopy}><AppText variant="label">TICKET FUTURO · SEM MISTURAR COM DINHEIRO</AppText><AppText variant="body">Atual {formatMoney(ticketTotal, hideValues)} + esperado {formatMoney(expectedTicketIncome + expectedTicketReload, hideValues)} − previsto {formatMoney(ticketExpenses, hideValues)}</AppText></View><AppText variant="mono" style={[styles.forecastValue, { color: ticketFuture >= 0 ? palette.amber : palette.danger }]}>{formatMoney(ticketFuture, hideValues)}</AppText></View>
+        <Pressable accessibilityRole="button" onPress={() => router.push('/future-income' as Href)} style={({ pressed }) => [styles.addIncome, { backgroundColor: pressed ? palette.surfacePressed : palette.surfaceRaised }]}><CircleDollarSign size={18} color={palette.mint} /><AppText variant="button" style={{ color: palette.mint }}>Adicionar salário ou entrada futura</AppText><ArrowRight size={17} color={palette.mint} /></Pressable>
+      </Surface>
+
       <Surface style={styles.position}>
         <View style={styles.positionHead}><View style={styles.positionCopy}><AppText variant="label">SITUAÇÃO DE {monthLabel.toUpperCase()}</AppText><AppText variant="caption">Saldo comum menos faturas do mês e dívidas externas</AppText></View><AppText variant="mono" numberOfLines={1} style={[styles.positionValue, { color: netPosition >= 0 ? palette.mint : palette.danger }]}>{formatMoney(netPosition, hideValues)}</AppText></View>
         <Divider />
@@ -103,7 +130,7 @@ export default function HomeScreen() {
 
       <View style={styles.section}>
         <SectionHeader title={`Faturas de ${monthLabel}`} action="Cartões" onAction={() => router.push('/cards')} />
-        <Surface style={styles.listSurface}>{monthInvoices.length ? monthInvoices.map((item, index) => <View key={item.id}>{index ? <Divider /> : null}<View style={styles.invoiceRow}><View style={[styles.insightIcon, { backgroundColor: palette.skyDeep }]}><CreditCard size={18} color={palette.sky} /></View><View style={styles.upcomingCopy}><AppText variant="body">{item.cardName}</AppText><AppText variant="caption">Fecha {formatDate(statementClosingDate(item.dueDate, item.closingDay, item.dueDay))} · vence {formatDate(item.dueDate)}</AppText></View><AppText variant="mono" style={styles.smallMoney}>{formatCompactMoney(item.amountCents, hideValues)}</AppText></View></View>) : <EmptyState title="Nenhuma fatura neste mês" description="Use as setas acima para conferir os próximos meses." />}</Surface>
+        <Surface style={styles.listSurface}>{monthInvoices.length ? monthInvoices.map((item, index) => <View key={item.id}>{index ? <Divider /> : null}<Pressable accessibilityRole="button" accessibilityLabel={`Pagar fatura ${item.cardName}`} onPress={() => router.push(`/pay-card-statement?cardId=${encodeURIComponent(item.cardId)}` as Href)} style={({ pressed }) => [styles.invoiceRow, pressed && styles.insightPressed]}><View style={[styles.insightIcon, { backgroundColor: palette.skyDeep }]}><CreditCard size={18} color={palette.sky} /></View><View style={styles.upcomingCopy}><AppText variant="body">{item.cardName}</AppText><AppText variant="caption">Fecha {formatDate(statementClosingDate(item.dueDate, item.closingDay, item.dueDay))} · vence {formatDate(item.dueDate)}</AppText>{(item.paidCents ?? 0) > 0 ? <AppText variant="caption" style={{ color: palette.mint }}>Pago {formatMoney(item.paidCents ?? 0, hideValues)} · restante {formatMoney(item.amountCents, hideValues)}</AppText> : null}</View><View style={styles.invoiceAction}><AppText variant="mono" style={styles.smallMoney}>{formatCompactMoney(item.amountCents, hideValues)}</AppText><Pill tone="mint">PAGAR</Pill></View></Pressable></View>) : <EmptyState title="Nenhuma fatura neste mês" description="Use as setas acima para conferir os próximos meses." />}</Surface>
       </View>
 
       <Pressable accessibilityRole="button" onPress={() => router.push('/assistant')} style={({ pressed }) => [styles.insight, { backgroundColor: pressed ? palette.surfacePressed : palette.surface }]}>
@@ -166,9 +193,22 @@ const styles = StyleSheet.create({
   insightCopy: { flex: 1, gap: spacing.sm },
   dailyLimit: { minHeight: 86, flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderRadius: radii.lg, padding: spacing.lg },
   ticketBalance: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  futureCard: { gap: spacing.md },
+  futureHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  futureTitle: { flex: 1, minWidth: 0, gap: 2 },
+  futureBalance: { gap: spacing.xs },
+  projectedFutureValue: { flexShrink: 1, minWidth: 0, fontSize: 30 },
+  forecastRow: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  forecastLabel: { flex: 1, minWidth: 0 },
+  forecastValue: { flexShrink: 0, textAlign: 'right', fontSize: 13 },
+  solvencyWarning: { borderRadius: radii.md, padding: spacing.md },
+  ticketForecast: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.md, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  ticketForecastCopy: { flex: 1, minWidth: 0, gap: 2 },
+  addIncome: { minHeight: 50, borderRadius: radii.md, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   section: { gap: spacing.md },
   listSurface: { paddingVertical: spacing.xs },
   invoiceRow: { minHeight: 74, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  invoiceAction: { flexShrink: 0, alignItems: 'flex-end', gap: spacing.xs },
   upcomingRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   date: { width: 48 },
   upcomingCopy: { flex: 1, gap: 2 },

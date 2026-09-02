@@ -41,7 +41,18 @@ const responsiveBackground = `
 html, body, #root {
   background-color: #070A0C;
   min-height: 100%;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
   overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+@media (max-width: 768px) {
+  input, textarea, select { font-size: 16px; }
 }
 
 body {

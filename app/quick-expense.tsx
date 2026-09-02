@@ -2,7 +2,7 @@ import * as Crypto from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Check, ChevronDown, X } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { AppText, EmptyState, PrimaryButton, Screen } from '@/components/ui';
 import { SyncRetry } from '@/components/SyncRetry';
@@ -101,12 +101,12 @@ export default function QuickExpenseScreen() {
       <Screen contentStyle={styles.content}>
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={step === 'main' ? 'Fechar' : 'Voltar'} onPress={() => step === 'main' ? router.back() : setStep('main')} style={[styles.close, { backgroundColor: palette.surface }]}><X size={20} color={palette.text} /></Pressable>
-          <AppText variant="section">{title}</AppText><View style={styles.headerSpacer} />
+          <AppText variant="section" numberOfLines={2} style={styles.headerTitle}>{title}</AppText><View style={styles.headerSpacer} />
         </View>
         {feedback ? <View accessibilityRole="alert" style={[styles.warning, { backgroundColor: palette.dangerDeep }]}><AppText variant="body" style={{ color: palette.danger }}>{feedback}</AppText></View> : null}
 
         {step === 'main' ? <>
-          <View style={styles.amountArea}><AppText variant="label">VALOR</AppText><View style={styles.amountRow}><AppText variant="title" style={{ color: palette.textMuted }}>R$</AppText><MoneyEntry value={amountCents} onChange={setAmountCents} /></View></View>
+          <View style={styles.amountArea}><AppText variant="label">VALOR</AppText><View style={styles.amountRow}><AppText variant="title" numberOfLines={1} style={[styles.amountCurrency, { color: palette.textMuted }]}>R$</AppText><MoneyEntry value={amountCents} onChange={setAmountCents} /></View></View>
           {finance.error ? <SyncRetry busy={finance.isRefreshing} onRetry={finance.refresh} tone="amber" title="Os dados não sincronizaram" description="Atualize antes de escolher a conta ou o cartão." /> : null}
           <View style={styles.form}>
             <View style={styles.field}><AppText variant="label">Descrição opcional</AppText><TextInput accessibilityLabel="Descrição" placeholder="Ex.: almoço" placeholderTextColor={palette.textDim} value={description} onChangeText={setDescription} style={[styles.input, { backgroundColor: palette.surface, color: palette.text }]} selectionColor={palette.mint} /></View>
@@ -135,8 +135,11 @@ function Selector({ label, value, detail, onPress }: { label: string; value: str
 
 function MoneyEntry({ value, onChange }: { value: number; onChange: (value: number) => void }) {
   const { palette } = useAppTheme();
+  const { width } = useWindowDimensions();
   const [draft, setDraft] = useState<string | null>(null);
-  return <TextInput accessibilityLabel="Valor do gasto" autoFocus keyboardType="number-pad" selectTextOnFocus value={draft ?? formatCentsInput(value)} onFocus={() => setDraft(formatCentsInput(value))} onBlur={() => setDraft(null)} onChangeText={(text) => { setDraft(text); onChange(parseBrlToCents(text)); }} selectionColor={palette.mint} style={[styles.amountInput, { color: palette.text }]} />;
+  const visibleValue = draft ?? formatCentsInput(value);
+  const fontSize = visibleValue.length > 12 ? 26 : visibleValue.length > 9 ? 32 : width < 380 ? 36 : 42;
+  return <TextInput accessibilityLabel="Valor do gasto" autoFocus keyboardType="number-pad" maxLength={16} selectTextOnFocus value={visibleValue} onFocus={() => setDraft(formatCentsInput(value))} onBlur={() => setDraft(null)} onChangeText={(text) => { setDraft(text); onChange(parseBrlToCents(text)); }} selectionColor={palette.mint} style={[styles.amountInput, { color: palette.text, fontSize, lineHeight: fontSize + 10 }]} />;
 }
 
 function Choice({ name, detail, selected, onPress }: { name: string; detail?: string; selected: boolean; onPress: () => void }) {
@@ -146,10 +149,10 @@ function Choice({ name, detail, selected, onPress }: { name: string; detail?: st
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.ink }, content: { paddingTop: spacing.md, flexGrow: 1 },
-  header: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, close: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, headerSpacer: { width: 44, height: 44 },
-  amountArea: { alignItems: 'center', paddingVertical: spacing.xxl }, amountRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm }, amountInput: { minWidth: 170, fontFamily: type.mono, fontSize: 42, lineHeight: 52, paddingVertical: 0 },
+  header: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }, close: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, headerTitle: { flex: 1, minWidth: 0, textAlign: 'center' }, headerSpacer: { width: 44, height: 44 },
+  amountArea: { alignItems: 'center', paddingVertical: spacing.xxl, maxWidth: '100%', overflow: 'hidden' }, amountRow: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, overflow: 'hidden' }, amountCurrency: { flexShrink: 0 }, amountInput: { width: '68%', maxWidth: 240, minWidth: 0, flexShrink: 1, fontFamily: type.mono, fontSize: 42, lineHeight: 52, paddingVertical: 0, paddingHorizontal: 0, textAlign: 'center' },
   warning: { borderRadius: radii.md, padding: spacing.md, gap: 2 }, form: { gap: spacing.lg }, field: { gap: spacing.sm }, input: { minHeight: 54, borderRadius: radii.md, fontFamily: type.regular, fontSize: 16, paddingHorizontal: spacing.lg },
-  selector: { minHeight: 64, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, gap: spacing.md }, selectorCopy: { flex: 1, gap: 2 },
+  selector: { minHeight: 64, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, gap: spacing.md }, selectorCopy: { flex: 1, minWidth: 0, gap: 2 },
   footer: { marginTop: 'auto', gap: spacing.lg, paddingTop: spacing.xl }, footerCopy: { textAlign: 'center', paddingHorizontal: spacing.xl }, choices: { gap: spacing.sm },
   choice: { minHeight: 68, borderRadius: radii.md, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderWidth: 1 }, choiceCopy: { flex: 1, gap: 2 }, check: { width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   installmentGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }, installment: { width: '31%', minHeight: 72, borderRadius: radii.md, borderWidth: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },

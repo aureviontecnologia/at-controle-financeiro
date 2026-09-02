@@ -1,4 +1,4 @@
-import type { Account, Budget, CreditCard, ExternalDebt, MonthlyGoal, Transaction, UpcomingExpense } from './types';
+import type { Account, Budget, CreditCard, ExternalDebt, FutureIncome, MonthlyGoal, Transaction, UpcomingExpense } from './types';
 
 export function accountSpendableCents(account: Account) {
   return Math.max(0, account.balanceCents - (account.reservedCents ?? 0));
@@ -42,6 +42,68 @@ export function ticketByOwner(accounts: Account[]) {
     },
     { alberto: 0, thauane: 0 },
   );
+}
+
+function dayInMonth(reference: Date, day: number) {
+  const lastDay = new Date(reference.getFullYear(), reference.getMonth() + 1, 0, 12).getDate();
+  return new Date(reference.getFullYear(), reference.getMonth(), Math.min(Math.max(1, day), lastDay), 12);
+}
+
+export function futureIncomeOccurrencesForMonth(incomes: FutureIncome[], selectedMonth: Date | string) {
+  const selected = typeof selectedMonth === 'string' ? new Date(selectedMonth) : selectedMonth;
+  if (Number.isNaN(selected.getTime())) return [];
+  const selectedKey = financeMonthKey(selected);
+  return incomes.flatMap((income) => {
+    const expected = new Date(income.expectedDate);
+    if (Number.isNaN(expected.getTime())) return [];
+    if (income.recurrence === 'once') return financeMonthKey(expected) === selectedKey ? [{ ...income, occurrenceDate: expected.toISOString() }] : [];
+    const selectedStart = new Date(selected.getFullYear(), selected.getMonth(), 1, 12);
+    const expectedStart = new Date(expected.getFullYear(), expected.getMonth(), 1, 12);
+    if (selectedStart.getTime() < expectedStart.getTime()) return [];
+    return [{ ...income, occurrenceDate: dayInMonth(selected, expected.getDate()).toISOString() }];
+  }).sort((a, b) => a.occurrenceDate.localeCompare(b.occurrenceDate));
+}
+
+export function expectedTicketReloadForMonth(accounts: Account[], selectedMonth: Date | string, today = new Date()) {
+  const selected = typeof selectedMonth === 'string' ? new Date(selectedMonth) : selectedMonth;
+  if (Number.isNaN(selected.getTime())) return 0;
+  const selectedStart = new Date(selected.getFullYear(), selected.getMonth(), 1, 12);
+  const currentStart = new Date(today.getFullYear(), today.getMonth(), 1, 12);
+  if (selectedStart.getTime() < currentStart.getTime()) return 0;
+  return accounts.reduce((sum, account) => {
+    if (!account.active || account.type !== 'ticket' || !account.expectedReloadDay || !account.expectedReloadCents) return sum;
+    const occurrence = dayInMonth(selected, account.expectedReloadDay);
+    const currentDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
+    if (selectedStart.getTime() === currentStart.getTime() && occurrence.getTime() < currentDay.getTime()) return sum;
+    return sum + account.expectedReloadCents;
+  }, 0);
+}
+
+export type ProjectionEvent = {
+  id: string;
+  date: string;
+  amountCents: number;
+  kind: 'income' | 'obligation';
+  label: string;
+};
+
+export function monthlySolvency(openingCents: number, events: ProjectionEvent[]) {
+  const ordered = [...events].sort((a, b) => a.date.localeCompare(b.date) || (a.kind === 'income' ? -1 : 1));
+  let balanceCents = openingCents;
+  let lowestBalanceCents = openingCents;
+  let firstShortfall: ProjectionEvent | null = null;
+  for (const event of ordered) {
+    balanceCents += event.kind === 'income' ? event.amountCents : -event.amountCents;
+    lowestBalanceCents = Math.min(lowestBalanceCents, balanceCents);
+    if (!firstShortfall && balanceCents < 0) firstShortfall = event;
+  }
+  return {
+    endingBalanceCents: balanceCents,
+    lowestBalanceCents,
+    shortfallCents: Math.max(0, -lowestBalanceCents),
+    firstShortfall,
+    canPayAllOnTime: firstShortfall === null,
+  };
 }
 
 export function totalCardUsage(cards: CreditCard[]) {

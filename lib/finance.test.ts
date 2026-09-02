@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { accountSpendableCents, applyInternalTransfer, availableCardLimit, budgetProgress, cardInvoiceTotalForMonth, consolidatedImpact, creditCardLimitBreakdown, dailyExpenseTotal, debtOutstanding, liquidPosition, monthlyCashFlow, monthlyGoalDeadline, monthlyGoalProgress, nextMonthlyOccurrence, nextStatementDueDate, normalizeFutureInvoiceMonth, projectedAvailable, statementClosingDate, statementStatus, ticketByOwner, totalAvailable, totalSpendable, totalTicketBalance } from './finance';
+import { accountSpendableCents, applyInternalTransfer, availableCardLimit, budgetProgress, cardInvoiceTotalForMonth, consolidatedImpact, creditCardLimitBreakdown, dailyExpenseTotal, debtOutstanding, expectedTicketReloadForMonth, futureIncomeOccurrencesForMonth, liquidPosition, monthlyCashFlow, monthlyGoalDeadline, monthlyGoalProgress, monthlySolvency, nextMonthlyOccurrence, nextStatementDueDate, normalizeFutureInvoiceMonth, projectedAvailable, statementClosingDate, statementStatus, ticketByOwner, totalAvailable, totalSpendable, totalTicketBalance } from './finance';
 import type { Account, CreditCard, Transaction } from './types';
 
 const accounts: Account[] = [
@@ -22,6 +22,32 @@ const transaction = (kind: Transaction['kind'], amountCents = 30000, occurredAt 
 });
 
 describe('invariantes do household', () => {
+  it('projeta renda recorrente no mês certo sem misturar saldo comum e Ticket', () => {
+    const entries = futureIncomeOccurrencesForMonth([
+      { id: 'salary', ownerId: 'alberto', title: 'Salário', amountCents: 250000, expectedDate: '2026-09-05T12:00:00-03:00', destinationType: 'account', recurrence: 'monthly' },
+      { id: 'ticket', ownerId: 'thauane', title: 'Ticket', amountCents: 60000, expectedDate: '2026-09-10T12:00:00-03:00', destinationType: 'ticket', recurrence: 'once' },
+    ], new Date('2026-10-01T12:00:00-03:00'));
+    expect(entries.map((item) => item.id)).toEqual(['salary']);
+    expect(entries[0].occurrenceDate.slice(0, 10)).toBe('2026-10-05');
+  });
+
+  it('considera apenas recargas de Ticket ainda futuras no mês atual', () => {
+    const ticketAccounts: Account[] = [{ id: 'ticket', ownerId: 'thauane', name: 'VA', institution: 'Ticket', type: 'ticket', balanceCents: 1000, expectedReloadDay: 10, expectedReloadCents: 50000, active: true }];
+    expect(expectedTicketReloadForMonth(ticketAccounts, new Date('2026-09-01T12:00:00-03:00'), new Date('2026-09-05T12:00:00-03:00'))).toBe(50000);
+    expect(expectedTicketReloadForMonth(ticketAccounts, new Date('2026-09-01T12:00:00-03:00'), new Date('2026-09-15T12:00:00-03:00'))).toBe(0);
+  });
+
+  it('detecta se cada obrigação pode ser paga antes do vencimento', () => {
+    const result = monthlySolvency(10000, [
+      { id: 'bill', date: '2026-09-03', amountCents: 12000, kind: 'obligation', label: 'Internet' },
+      { id: 'salary', date: '2026-09-05', amountCents: 50000, kind: 'income', label: 'Salário' },
+    ]);
+    expect(result.canPayAllOnTime).toBe(false);
+    expect(result.shortfallCents).toBe(2000);
+    expect(result.firstShortfall?.label).toBe('Internet');
+    expect(result.endingBalanceCents).toBe(48000);
+  });
+
   it('separa o dinheiro guardado do saldo livre sem apagar o patrimônio da conta', () => {
     const reserved = { ...accounts[0], balanceCents: 100_00, reservedCents: 35_00 };
     expect(accountSpendableCents(reserved)).toBe(65_00);

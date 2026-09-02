@@ -1,5 +1,5 @@
 import { databasePaymentMethod, paymentMethodDetail, paymentMethodLabel, type PaymentMethodId } from './payment';
-import type { Account, Budget, CreditCard, ExternalDebt, HouseholdMember, MemberId, MonthlyGoal, SavingsPot, Transaction, UpcomingExpense } from './types';
+import type { Account, Budget, CreditCard, ExternalDebt, FutureIncome, HouseholdMember, MemberId, MonthlyGoal, SavingsPot, Transaction, UpcomingExpense } from './types';
 import { supabase } from './supabase';
 import { notifyPartnerActivity } from './notifications';
 
@@ -22,6 +22,7 @@ export type FinanceSnapshot = {
   debts: ExternalDebt[];
   monthlyGoal: MonthlyGoal | null;
   savingsPots: SavingsPot[];
+  futureIncomes: FutureIncome[];
   dailySpendLimitCents: number;
   notificationsEnabled: boolean;
   members: HouseholdMember[];
@@ -124,9 +125,10 @@ export async function fetchFinanceSnapshot(userId: string): Promise<FinanceSnaps
     supabase.from('monthly_goals').select('*').eq('household_id', householdId).eq('month', currentMonthDate()).maybeSingle(),
     supabase.from('notification_preferences').select('new_transaction').eq('household_id', householdId).eq('user_id', userId).maybeSingle(),
   ]);
-  const [savingsResult, settingsResult] = await Promise.all([
+  const [savingsResult, settingsResult, futureIncomesResult] = await Promise.all([
     supabase.from('savings_pots').select('*').eq('household_id', householdId).is('archived_at', null).order('created_at'),
     supabase.from('household_finance_settings').select('daily_spend_limit_cents').eq('household_id', householdId).maybeSingle(),
+    supabase.from('future_incomes').select('*').eq('household_id', householdId).is('archived_at', null).order('expected_date'),
   ]);
 
   const rawMembers = assertData(membersResult.data, membersResult.error) as Array<{ user_id: string; role: 'owner' | 'member'; status: string; joined_at: string }>;
@@ -160,7 +162,7 @@ export async function fetchFinanceSnapshot(userId: string): Promise<FinanceSnaps
   const usedByCard = statements.reduce((map, item) => map.set(item.card_id, (map.get(item.card_id) ?? 0) + Number(item.remaining_cents)), new Map<string, number>());
   const invoicesByCard = statements.reduce((map, item) => {
     const invoices = map.get(item.card_id) ?? ([] as NonNullable<CreditCard['invoices']>);
-    invoices.push({ id: item.id, dueDate: `${item.due_date}T12:00:00-03:00`, amountCents: Number(item.remaining_cents), status: item.status });
+    invoices.push({ id: item.id, dueDate: `${item.due_date}T12:00:00-03:00`, amountCents: Number(item.remaining_cents), totalCents: Number(item.purchase_total_cents), paidCents: Number(item.amount_paid_cents), status: item.status });
     map.set(item.card_id, invoices);
     return map;
   }, new Map<string, NonNullable<CreditCard['invoices']>>());
@@ -208,6 +210,16 @@ export async function fetchFinanceSnapshot(userId: string): Promise<FinanceSnaps
     lastPaidAt: item.last_paid_at ?? undefined,
   })).sort((a, b) => Number(a.paid) - Number(b.paid) || a.dueDate.localeCompare(b.dueDate));
   const savingsPots: SavingsPot[] = rawSavings.map((item) => ({ id: item.id, accountId: item.account_id, name: item.name, balanceCents: Number(item.balance_cents), targetCents: item.target_cents == null ? undefined : Number(item.target_cents), updatedAt: item.updated_at }));
+  const futureIncomes: FutureIncome[] = (assertData(futureIncomesResult.data, futureIncomesResult.error) as Array<Record<string, any>>).map((item) => ({
+    id: item.id,
+    ownerId: memberId(memberNames.get(item.owner_id)),
+    title: item.title,
+    amountCents: Number(item.amount_cents),
+    expectedDate: `${item.expected_date}T12:00:00-03:00`,
+    destinationType: item.destination_type,
+    accountId: item.destination_account_id ?? undefined,
+    recurrence: item.recurrence_rule === 'FREQ=MONTHLY' ? 'monthly' : 'once',
+  }));
   const monthStart = new Date(`${currentMonthDate()}T00:00:00-03:00`);
   const spentByCategory = rawTransactions.filter((item) => ['expense', 'card_purchase'].includes(item.kind) && new Date(item.occurred_at) >= monthStart).reduce((map, item) => map.set(item.category_id, (map.get(item.category_id) ?? 0) + Number(item.amount_cents)), new Map<string, number>());
   const budgets: Budget[] = (assertData(budgetsResult.data, budgetsResult.error) as Array<Record<string, any>>).map((item) => ({ id: item.id, category: categoryNames.get(item.category_id) ?? 'Outros', limitCents: Number(item.limit_cents), spentCents: spentByCategory.get(item.category_id) ?? 0 }));
@@ -240,7 +252,7 @@ export async function fetchFinanceSnapshot(userId: string): Promise<FinanceSnaps
       isCurrent: item.user_id === userId,
     };
   });
-  return { householdId, accounts, cards, transactions, upcoming, budgets, debts, monthlyGoal, savingsPots, dailySpendLimitCents, notificationsEnabled, members };
+  return { householdId, accounts, cards, transactions, upcoming, budgets, debts, monthlyGoal, savingsPots, futureIncomes, dailySpendLimitCents, notificationsEnabled, members };
   } catch (reason) {
     throw normalizeFinanceError(reason);
   }
@@ -264,6 +276,33 @@ export async function createOnlineScheduledExpense(input: { householdId: string;
   if (error || !data) throw new Error('Não foi possível adicionar a conta ou assinatura.');
   await notifyPartnerActivity(input.householdId, { type: 'scheduled', amountCents: input.amountCents, description: input.title.trim() });
   return data.id as string;
+}
+
+export async function saveOnlineFutureIncome(input: { householdId: string; incomeId?: string; ownerUserId: string; title: string; amountCents: number; expectedDate: string; destinationType: FutureIncome['destinationType']; accountId?: string; recurring: boolean; idempotencyKey: string }) {
+  if (!supabase) throw new Error('Supabase não configurado.');
+  const client = supabase;
+  const { data, error } = await mutationWithRetry(() => client.rpc('save_future_income', {
+    target_household: input.householdId,
+    target_income: input.incomeId ?? null,
+    target_owner: input.ownerUserId,
+    income_title: input.title.trim(),
+    income_amount: input.amountCents,
+    income_date: input.expectedDate,
+    income_destination: input.destinationType,
+    destination_account: input.accountId ?? null,
+    recurring: input.recurring,
+    request_key: input.idempotencyKey,
+  }));
+  if (error || !data) throw new Error(error?.message.includes('invalid_future_income') ? 'Confira nome, valor, data e destino da entrada futura.' : 'Não foi possível salvar a entrada futura.');
+  await notifyPartnerActivity(input.householdId, { type: 'income', amountCents: input.amountCents, description: `${input.title.trim()} prevista` });
+  return data as string;
+}
+
+export async function archiveOnlineFutureIncome(input: { householdId: string; incomeId: string }) {
+  if (!supabase) throw new Error('Supabase não configurado.');
+  const { data, error } = await supabase.rpc('archive_future_income', { target_household: input.householdId, target_income: input.incomeId });
+  if (error || !data) throw new Error('Não foi possível remover a entrada futura.');
+  return data as string;
 }
 
 export async function payOnlineScheduledExpense(input: { householdId: string; scheduleId: string; sourceId: string; sourceKind: 'account' | 'card'; paymentMethod: PaymentMethodId; paymentMethodDetail?: string; amountCents: number; description: string; idempotencyKey: string }) {
@@ -392,20 +431,22 @@ export async function saveOnlineDailySpendLimit(input: { householdId: string; am
 
 export async function payOnlineCardStatement(input: { householdId: string; statementId: string; accountId: string; amountCents: number; idempotencyKey: string }) {
   if (!supabase) throw new Error('Supabase não configurado.');
-  const { data, error } = await supabase.rpc('pay_card_statement', {
+  const client = supabase;
+  const { data, error } = await mutationWithRetry(() => client.rpc('pay_card_statement', {
     target_household: input.householdId,
     target_statement: input.statementId,
     target_account: input.accountId,
     amount: input.amountCents,
     paid_at: new Date().toISOString(),
     request_key: input.idempotencyKey,
-  });
+  }));
   if (error || !data) {
     if (error?.message.includes('insufficient_funds')) throw new Error('Saldo livre insuficiente na conta escolhida.');
     if (error?.message.includes('payment_exceeds_statement_balance')) throw new Error('O valor é maior que o saldo restante da fatura.');
     if (error?.message.includes('statement_not_found')) throw new Error('Esta fatura já mudou ou não está mais disponível. Atualize e tente novamente.');
     throw new Error('Não foi possível pagar a fatura.');
   }
+  await notifyPartnerActivity(input.householdId, { type: 'other', amountCents: input.amountCents, description: 'pagou uma fatura de cartão' });
   return data as string;
 }
 

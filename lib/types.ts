@@ -53,8 +53,21 @@ export type CreditCard = {
     id: string;
     dueDate: string;
     amountCents: number;
+    totalCents?: number;
+    paidCents?: number;
     status: 'open' | 'partially_paid' | 'paid' | 'overdue';
   }>;
+};
+
+export type FutureIncome = {
+  id: string;
+  ownerId: MemberId;
+  title: string;
+  amountCents: number;
+  expectedDate: string;
+  destinationType: 'account' | 'ticket';
+  accountId?: string;
+  recurrence: 'once' | 'monthly';
 };
 
 export type TransactionKind =

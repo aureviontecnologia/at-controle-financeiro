@@ -29,7 +29,7 @@ export function BalanceHero({ totalCents, albertoCents, thauaneCents, projectedC
           {hidden ? <EyeOff size={20} color={palette.textMuted} /> : <Eye size={20} color={palette.textMuted} />}
         </Pressable>
       </View>
-      <AppText variant="display" style={styles.total}>{formatMoney(totalCents, hidden)}</AppText>
+      <AppText variant="display" numberOfLines={1} style={styles.total}>{formatMoney(totalCents, hidden)}</AppText>
       <View style={styles.orbitTrack} accessibilityLabel={`Alberto ${Math.round(albertoShare)} por cento, Thauane ${Math.round(100 - albertoShare)} por cento`}>
         <View style={[styles.albertoTrack, { flex: albertoShare, backgroundColor: palette.mint }]} />
         <View style={[styles.thauaneTrack, { flex: 100 - albertoShare, backgroundColor: palette.sky }]} />
@@ -37,14 +37,14 @@ export function BalanceHero({ totalCents, albertoCents, thauaneCents, projectedC
       <View style={styles.peopleRow}>
         <View style={styles.person}>
           <View style={[styles.dot, { backgroundColor: palette.mint }]} />
-          <View>
+          <View style={styles.personCopy}>
             <AppText variant="caption">ALBERTO</AppText>
             <AppText variant="mono" style={styles.personValue}>{formatMoney(albertoCents, hidden)}</AppText>
           </View>
         </View>
         <View style={styles.person}>
           <View style={[styles.dot, { backgroundColor: palette.sky }]} />
-          <View>
+          <View style={styles.personCopy}>
             <AppText variant="caption">THAUANE</AppText>
             <AppText variant="mono" style={styles.personValue}>{formatMoney(thauaneCents, hidden)}</AppText>
           </View>
@@ -71,15 +71,16 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   heroLabel: { minHeight: 36, justifyContent: 'center', gap: 1 },
   strawberryLabel: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  total: { marginTop: spacing.md, fontFamily: type.mono, fontSize: 32 },
+  total: { marginTop: spacing.md, fontFamily: type.mono, fontSize: 30, flexShrink: 1, minWidth: 0 },
   orbitTrack: { marginTop: spacing.xl, height: 5, flexDirection: 'row', gap: 3 },
   albertoTrack: { backgroundColor: colors.mint, borderRadius: radii.pill, minWidth: 4 },
   thauaneTrack: { backgroundColor: colors.sky, borderRadius: radii.pill, minWidth: 4 },
   peopleRow: { marginTop: spacing.lg, flexDirection: 'row', justifyContent: 'space-between', gap: spacing.lg },
   person: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  personCopy: { flex: 1, minWidth: 0 },
   dot: { width: 7, height: 7, borderRadius: 4, marginTop: 4 },
   personValue: { fontSize: 13, marginTop: 2 },
-  projected: { marginTop: spacing.xl, paddingTop: spacing.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  projected: { marginTop: spacing.xl, paddingTop: spacing.lg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   projectedCopy: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
   projectedValue: { color: colors.amber, fontSize: 13 },
 });

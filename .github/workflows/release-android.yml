@@ -10,11 +10,6 @@ on:
         description: 'Tag existente para gerar (ex.: v1.0.6)'
         required: true
         type: string
-      import_saldo_source:
-        description: 'Importar uma única vez o código revisado do Saldo 1.0.15 enviado pelo navegador'
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: write
@@ -39,24 +34,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.import_saldo_source && 'main' || inputs.release_tag || github.ref }}
-
-      - name: Importar código revisado enviado pelo navegador
-        if: ${{ inputs.import_saldo_source }}
-        env:
-          REQUESTED_TAG: ${{ inputs.release_tag }}
-        run: |
-          set -euo pipefail
-          test "$REQUESTED_TAG" = 'v1.0.15'
-          echo 'd3e3524050fe9cef617cdd5135a9f8a82d09423026a0614a8e1aafae304d09ed  Saldo-1.0.15-source.patch' | sha256sum --check
-          git apply --check Saldo-1.0.15-source.patch
-          git apply --index Saldo-1.0.15-source.patch
-          git rm Saldo-1.0.15-source.patch
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'feat: publicar Saldo pessoal Android 1.0.15 revisado'
-          git tag v1.0.15
-          git push --atomic origin HEAD:main refs/tags/v1.0.15
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - uses: actions/setup-node@v4
         with:

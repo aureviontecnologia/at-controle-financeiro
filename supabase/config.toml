@@ -17,13 +17,13 @@ port = 54323
 
 [auth]
 enabled = true
-site_url = "aurevion://"
-additional_redirect_urls = ["exp://127.0.0.1:8081", "http://localhost:8081"]
-enable_signup = true
-minimum_password_length = 10
+site_url = "aurevion://reset-password"
+additional_redirect_urls = ["aurevion://reset-password"]
+enable_signup = false
+minimum_password_length = 12
 
 [auth.rate_limit]
-email_sent = 2
+email_sent = 5
 token_refresh = 120
 sign_in_sign_ups = 20
 token_verifications = 20

@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import type { AiConversation, AiMessage } from './types';
 
 function requireClient() {
-  if (!supabase) throw new Error('O histórico compartilhado precisa do Supabase conectado.');
+  if (!supabase) throw new Error('O histórico pessoal precisa do Supabase conectado.');
   return supabase;
 }
 

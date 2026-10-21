@@ -4,7 +4,7 @@ import * as Crypto from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
-import { Linking, Platform } from 'react-native';
+import { Linking } from 'react-native';
 
 import { isVersionNewer, normalizeVersion } from './version';
 
@@ -126,7 +126,7 @@ export async function downloadAndOpenInstaller(
   update: AvailableUpdate,
   onProgress?: (progress: number) => void,
 ) {
-  if (Platform.OS !== 'android' || isExpoGo) {
+  if (isExpoGo) {
     await Linking.openURL(update.releaseUrl);
     return;
   }

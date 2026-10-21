@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowDownToLine, ArrowUpFromLine, PiggyBank, Plus, X } from 'lucide-react-native';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { AppText, Divider, EmptyState, PrimaryButton, Screen, Surface } from '@/components/ui';
 import { radii, spacing, type } from '@/constants/theme';
@@ -21,8 +21,9 @@ export default function AccountDetailsScreen() {
   const addLocalPot = useFinanceStore((state) => state.addSavingsPot);
   const adjustLocalPot = useFinanceStore((state) => state.adjustSavingsPot);
   const [selectedAccountId, setSelectedAccountId] = useState('');
-  const effectiveAccountId = finance.accounts.some((item) => item.id === id) ? id : selectedAccountId || finance.accounts[0]?.id;
-  const account = finance.accounts.find((item) => item.id === effectiveAccountId);
+  const eligibleAccounts = finance.accounts.filter((item) => item.type !== 'ticket');
+  const effectiveAccountId = eligibleAccounts.some((item) => item.id === id) ? id : selectedAccountId || eligibleAccounts[0]?.id;
+  const account = eligibleAccounts.find((item) => item.id === effectiveAccountId);
   const pots = finance.savingsPots.filter((item) => item.accountId === effectiveAccountId);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
@@ -36,7 +37,7 @@ export default function AccountDetailsScreen() {
 
   async function refreshAfter(action: () => Promise<unknown> | unknown) {
     setSaving(true);
-    try { await action(); await finance.refresh(); }
+    try { await action(); if (!user?.demo) await finance.refresh(); }
     catch (reason) { Alert.alert('Não foi possível concluir', reason instanceof Error ? reason.message : 'Tente novamente.'); }
     finally { setSaving(false); }
   }
@@ -48,7 +49,7 @@ export default function AccountDetailsScreen() {
     await refreshAfter(async () => {
       if (user.demo) addLocalPot({ accountId: selectedAccount.id, name: name.trim(), balanceCents: openingCents, targetCents: targetCents || undefined });
       else {
-        if (!finance.householdId) throw new Error('A família ainda não sincronizou.');
+        if (!finance.householdId) throw new Error('Seu espaço financeiro ainda não sincronizou.');
         await createOnlineSavingsPot({ householdId: finance.householdId, accountId: selectedAccount.id, name, openingCents, targetCents: targetCents || undefined });
       }
       setName(''); setOpeningCents(0); setTargetCents(0); setAdding(false);
@@ -63,17 +64,17 @@ export default function AccountDetailsScreen() {
       const delta = adjustmentCents * direction;
       if (user?.demo) adjustLocalPot(pot.id, delta);
       else {
-        if (!finance.householdId) throw new Error('A família ainda não sincronizou.');
+        if (!finance.householdId) throw new Error('Seu espaço financeiro ainda não sincronizou.');
         await adjustOnlineSavingsPot({ householdId: finance.householdId, potId: pot.id, potName: pot.name, amountDeltaCents: delta });
       }
       setAdjustmentCents(0);
     });
   }
 
-  return <KeyboardAvoidingView style={[styles.flex, { backgroundColor: palette.ink }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><Screen>
+  return <KeyboardAvoidingView style={[styles.flex, { backgroundColor: palette.ink }]} behavior="height"><Screen>
     <Header title={id ? 'Detalhes da conta' : 'Cofres e caixinhas'} />
-    {!id && finance.accounts.length > 1 ? <View style={styles.field}><AppText variant="label">CONTA ONDE O DINHEIRO ESTÁ</AppText><View style={styles.accountOptions}>{finance.accounts.map((item) => <Pressable key={item.id} onPress={() => { setSelectedAccountId(item.id); setSelectedPotId(''); }} style={[styles.accountOption, { backgroundColor: palette.surface, borderColor: item.id === effectiveAccountId ? palette.mint : palette.lineSoft }]}><View style={styles.copy}><AppText variant="body">{item.name}</AppText><AppText variant="caption">{formatMoney(accountSpendableCents(item))} livres · {formatMoney(item.reservedCents ?? 0)} guardados</AppText></View>{item.id === effectiveAccountId ? <View style={[styles.selectedDot, { backgroundColor: palette.mint }]} /> : null}</Pressable>)}</View></View> : null}
-    <View style={styles.heading}><AppText variant="title">{account.name}</AppText><AppText variant="bodyMuted">{account.institution} · {account.ownerId === 'alberto' ? 'Alberto' : 'Thauane'}</AppText></View>
+    {!id && eligibleAccounts.length > 1 ? <View style={styles.field}><AppText variant="label">CONTA ONDE O DINHEIRO ESTÁ</AppText><View style={styles.accountOptions}>{eligibleAccounts.map((item) => <Pressable key={item.id} onPress={() => { setSelectedAccountId(item.id); setSelectedPotId(''); }} style={[styles.accountOption, { backgroundColor: palette.surface, borderColor: item.id === effectiveAccountId ? palette.mint : palette.lineSoft }]}><View style={styles.copy}><AppText variant="body">{item.name}</AppText><AppText variant="caption">{formatMoney(accountSpendableCents(item))} livres · {formatMoney(item.reservedCents ?? 0)} guardados</AppText></View>{item.id === effectiveAccountId ? <View style={[styles.selectedDot, { backgroundColor: palette.mint }]} /> : null}</Pressable>)}</View></View> : null}
+    <View style={styles.heading}><AppText variant="title">{account.name}</AppText><AppText variant="bodyMuted">{account.institution}</AppText></View>
     <Surface style={styles.balance}><View><AppText variant="caption">SALDO LIVRE</AppText><AppText variant="display">{formatMoney(accountSpendableCents(account))}</AppText></View><View><AppText variant="caption">GUARDADO</AppText><AppText variant="mono">{formatMoney(account.reservedCents ?? 0)}</AppText></View><View><AppText variant="caption">TOTAL NO BANCO</AppText><AppText variant="mono">{formatMoney(account.balanceCents)}</AppText></View></Surface>
     <View style={styles.sectionHeading}><View><AppText variant="section">Cofres e caixinhas</AppText><AppText variant="caption">O valor fica separado e não pode ser gasto por engano.</AppText></View><Pressable accessibilityLabel="Criar cofre" onPress={() => setAdding((value) => !value)} style={[styles.iconButton, { backgroundColor: palette.mint }]}><Plus size={20} color={palette.ink} /></Pressable></View>
     {adding ? <Surface style={styles.form}><Field label="Nome" value={name} onChangeText={setName} placeholder="Ex.: Reserva, viagem" /><MoneyField label="Valor inicial" value={openingCents} onChange={setOpeningCents} /><MoneyField label="Meta opcional" value={targetCents} onChange={setTargetCents} /><PrimaryButton label="Criar cofre" loading={saving} onPress={() => void createPot()} /></Surface> : null}

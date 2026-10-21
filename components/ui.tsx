@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,13 +13,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ThemeAmbientMotion } from '@/components/ThemeAmbientMotion';
 import { colors, radii, spacing, type } from '@/constants/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useAppTheme } from '@/providers/ThemeProvider';
 
 export function Screen({ children, scroll = true, contentStyle }: { children: ReactNode; scroll?: boolean; contentStyle?: ViewStyle }) {
-  const { palette, strawberryEnabled } = useAppTheme();
+  const { palette } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const entrance = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
 
@@ -29,7 +27,7 @@ export function Screen({ children, scroll = true, contentStyle }: { children: Re
       entrance.setValue(1);
       return;
     }
-    const animation = Animated.timing(entrance, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: Platform.OS !== 'web' });
+    const animation = Animated.timing(entrance, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true });
     animation.start();
     return () => animation.stop();
   }, [entrance, reducedMotion]);
@@ -47,20 +45,20 @@ export function Screen({ children, scroll = true, contentStyle }: { children: Re
   ) : (
     <Animated.View style={[styles.screenContent, styles.flex, motionStyle, contentStyle]}>{children}</Animated.View>
   );
-  return <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: palette.ink }]}>{strawberryEnabled ? <ThemeAmbientMotion /> : null}{content}</SafeAreaView>;
+  return <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: palette.ink }]}>{content}</SafeAreaView>;
 }
 
-export function AppText({ children, style, variant = 'body', numberOfLines, accessibilityLiveRegion }: { children: ReactNode; style?: TextStyle | TextStyle[]; variant?: keyof typeof textStyles; numberOfLines?: number; accessibilityLiveRegion?: 'none' | 'polite' | 'assertive' }) {
+export function AppText({ children, style, variant = 'body', numberOfLines, adjustsFontSizeToFit, accessibilityLiveRegion }: { children: ReactNode; style?: TextStyle | TextStyle[]; variant?: keyof typeof textStyles; numberOfLines?: number; adjustsFontSizeToFit?: boolean; accessibilityLiveRegion?: 'none' | 'polite' | 'assertive' }) {
   const { palette } = useAppTheme();
   const themedColor = variant === 'bodyMuted' || variant === 'label' || variant === 'caption' ? palette.textMuted : variant === 'button' ? palette.ink : palette.text;
-  return <Text accessibilityLiveRegion={accessibilityLiveRegion} numberOfLines={numberOfLines} style={[textStyles[variant], { color: themedColor }, style]}>{children}</Text>;
+  return <Text accessibilityLiveRegion={accessibilityLiveRegion} numberOfLines={numberOfLines} adjustsFontSizeToFit={adjustsFontSizeToFit} style={[textStyles[variant], { color: themedColor }, style]}>{children}</Text>;
 }
 
 export function SectionHeader({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
   const { palette } = useAppTheme();
   return (
     <View style={styles.sectionHeader}>
-      <AppText variant="section">{title}</AppText>
+      <AppText variant="section" style={styles.sectionTitle}>{title}</AppText>
       {action && onAction ? (
         <Pressable accessibilityRole="button" hitSlop={12} onPress={onAction}>
           <AppText variant="label" style={[styles.action, { color: palette.mint }]}>{action}</AppText>
@@ -71,8 +69,8 @@ export function SectionHeader({ title, action, onAction }: { title: string; acti
 }
 
 export function Surface({ children, style }: { children?: ReactNode; style?: ViewStyle | ViewStyle[] }) {
-  const { palette, strawberryEnabled } = useAppTheme();
-  return <View style={[styles.surface, { backgroundColor: palette.surface }, strawberryEnabled && { borderWidth: StyleSheet.hairlineWidth, borderColor: palette.lineSoft }, style]}>{children}</View>;
+  const { palette } = useAppTheme();
+  return <View style={[styles.surface, { backgroundColor: palette.surface, borderColor: palette.lineSoft }, style]}>{children}</View>;
 }
 
 export function Pill({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'mint' | 'amber' | 'danger' }) {
@@ -92,7 +90,7 @@ export function PrimaryButton({ label, onPress, loading = false, disabled = fals
   const scale = useRef(new Animated.Value(1)).current;
   const animateScale = (toValue: number) => {
     if (reducedMotion) return;
-    Animated.timing(scale, { toValue, duration: toValue < 1 ? 100 : 130, easing: Easing.out(Easing.cubic), useNativeDriver: Platform.OS !== 'web' }).start();
+    Animated.timing(scale, { toValue, duration: toValue < 1 ? 100 : 130, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   };
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
@@ -155,9 +153,10 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.ink },
   flex: { flex: 1 },
   screenContent: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxxl, gap: spacing.xl },
-  sectionHeader: { minHeight: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sectionHeader: { minHeight: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  sectionTitle: { flex: 1, minWidth: 0 },
   action: { color: colors.mint },
-  surface: { backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.lg },
+  surface: { backgroundColor: colors.surface, borderRadius: radii.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing.lg },
   pill: { alignSelf: 'flex-start', borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 6 },
   primaryButton: { minHeight: 54, borderRadius: radii.md, backgroundColor: colors.mint, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg },
   primaryPressed: { backgroundColor: '#92E9C2', transform: [{ scale: 0.99 }] },

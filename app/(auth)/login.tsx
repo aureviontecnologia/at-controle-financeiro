@@ -1,13 +1,13 @@
 import { ArrowLeft, Check, Eye, EyeOff, KeyRound, LockKeyhole, MailCheck } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { z } from 'zod';
 
 import { BrandMark } from '@/components/BrandMark';
-import { PwaInstallHint } from '@/components/PwaInstallHint';
 import { AppText, PrimaryButton, Screen } from '@/components/ui';
 import { colors, radii, spacing, type } from '@/constants/theme';
-import { useAuth } from '@/providers/AuthProvider';
+import { passwordPolicyError } from '@/lib/passwordPolicy';
+import { PERSONAL_ACCOUNT_EMAIL, useAuth } from '@/providers/AuthProvider';
 
 const schema = z.object({
   email: z.string().email('Digite um email válido.'),
@@ -17,8 +17,8 @@ const schema = z.object({
 });
 
 export default function LoginScreen() {
-  const { signIn, enterDemo, configured, requestPasswordReset } = useAuth();
-  const [email, setEmail] = useState('');
+  const { signIn, enterDemo, configured, requestPasswordReset, confirmPasswordReset } = useAuth();
+  const [email, setEmail] = useState(PERSONAL_ACCOUNT_EMAIL);
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(true);
   const [visible, setVisible] = useState(false);
@@ -26,6 +26,10 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [recovering, setRecovering] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(0);
+  const [code, setCode] = useState('');
+  const [recoveryPassword, setRecoveryPassword] = useState('');
+  const [recoveryConfirmation, setRecoveryConfirmation] = useState('');
+  const [recoveryVisible, setRecoveryVisible] = useState(false);
 
   useEffect(() => {
     if (resendSeconds <= 0) return;
@@ -62,13 +66,35 @@ export default function LoginScreen() {
     }
   }
 
+  async function confirmCode() {
+    if (!/^\d{6,8}$/.test(code.trim())) return setError('Digite o código numérico recebido no email.');
+    const policyError = passwordPolicyError(recoveryPassword);
+    if (policyError) return setError(policyError);
+    if (recoveryPassword !== recoveryConfirmation) return setError('As senhas novas não coincidem.');
+    setError('');
+    setLoading(true);
+    try {
+      await confirmPasswordReset({ email, code, password: recoveryPassword });
+      setRecovering(false);
+      setCode('');
+      setRecoveryPassword('');
+      setRecoveryConfirmation('');
+      setPassword('');
+      setError('Senha redefinida. Entre com a nova senha.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Não foi possível confirmar o código.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <KeyboardAvoidingView style={styles.flex} behavior="height">
       <Screen contentStyle={styles.content}>
         <View style={styles.brand}>
           <View style={styles.mark}><BrandMark size={38} /></View>
-          <AppText variant="title">A&amp;T Controle Financeiro</AppText>
-          <AppText variant="bodyMuted" style={styles.subtitle}>As finanças de vocês, em um só lugar.</AppText>
+          <AppText variant="title">Saldo.</AppText>
+          <AppText variant="bodyMuted" style={styles.subtitle}>Seu dinheiro, sem ruído.</AppText>
         </View>
 
         <View style={styles.form}>
@@ -86,8 +112,8 @@ export default function LoginScreen() {
             <View accessibilityLiveRegion="polite" style={styles.resetCard}>
               <View style={styles.resetIcon}><MailCheck size={22} color={colors.mint} /></View>
               <View style={styles.resetCopy}>
-                <AppText variant="section">Link seguro enviado</AppText>
-                <AppText variant="bodyMuted">Abra o email de A&amp;T Controle Financeiro e toque no link. O app voltará na tela para criar a nova senha.</AppText>
+                <AppText variant="section">Recuperação enviada</AppText>
+                <AppText variant="bodyMuted">Use o botão do email para voltar ao Saldo. Se o email exibir um código, você também pode concluir aqui.</AppText>
               </View>
             </View>
           ) : (
@@ -111,23 +137,25 @@ export default function LoginScreen() {
             </View>
           ) : null}
           {error ? <AppText variant="label" style={styles.error}>{error}</AppText> : null}
-          {recovering ? <PrimaryButton label={resendSeconds > 0 ? `Reenviar em ${resendSeconds}s` : 'Reenviar link'} loading={loading} disabled={resendSeconds > 0 || !configured} onPress={() => void resetPassword()} icon={<KeyRound size={18} color={colors.ink} />} /> : <PrimaryButton label="Entrar" loading={loading} disabled={!configured} onPress={() => void handleLogin()} icon={<LockKeyhole size={18} color={colors.ink} />} />}
+          {recovering ? <>
+            <View style={styles.field}><AppText variant="label">Código do email</AppText><TextInput accessibilityLabel="Código de recuperação" autoComplete="one-time-code" keyboardType="number-pad" maxLength={8} placeholder="000000" placeholderTextColor={colors.textDim} selectionColor={colors.mint} style={styles.input} value={code} onChangeText={(value) => setCode(value.replace(/\D/g, ''))} /></View>
+            <View style={styles.field}><AppText variant="label">Nova senha</AppText><View style={styles.passwordField}><TextInput accessibilityLabel="Nova senha" autoComplete="new-password" placeholder="Senha forte" placeholderTextColor={colors.textDim} secureTextEntry={!recoveryVisible} selectionColor={colors.mint} style={[styles.input, styles.passwordInput]} value={recoveryPassword} onChangeText={setRecoveryPassword} /><Pressable accessibilityRole="button" accessibilityLabel={recoveryVisible ? 'Ocultar senha' : 'Mostrar senha'} onPress={() => setRecoveryVisible((value) => !value)}>{recoveryVisible ? <EyeOff size={20} color={colors.textMuted} /> : <Eye size={20} color={colors.textMuted} />}</Pressable></View></View>
+            <View style={styles.field}><AppText variant="label">Confirmar nova senha</AppText><TextInput accessibilityLabel="Confirmar nova senha" autoComplete="new-password" placeholder="Repita a senha" placeholderTextColor={colors.textDim} secureTextEntry={!recoveryVisible} selectionColor={colors.mint} style={styles.input} value={recoveryConfirmation} onChangeText={setRecoveryConfirmation} /></View>
+            <PrimaryButton label="Confirmar código" loading={loading} disabled={!configured} onPress={() => void confirmCode()} icon={<KeyRound size={18} color={colors.ink} />} />
+            <Pressable accessibilityRole="button" disabled={resendSeconds > 0 || loading || !configured} onPress={() => void resetPassword()} style={styles.resend}><AppText variant="label" style={{ color: resendSeconds > 0 ? colors.textDim : colors.mint }}>{resendSeconds > 0 ? `Novo envio em ${resendSeconds}s` : 'Reenviar recuperação'}</AppText></Pressable>
+          </> : <PrimaryButton label="Entrar" loading={loading} disabled={!configured} onPress={() => void handleLogin()} icon={<LockKeyhole size={18} color={colors.ink} />} />}
         </View>
 
         {!configured && !recovering ? (
           <View style={styles.demo}>
             <View style={styles.demoHead}><View style={styles.liveDot} /><AppText variant="caption" style={styles.demoTitle}>DEMONSTRAÇÃO LOCAL · SEM CUSTO</AppText></View>
-            <AppText variant="bodyMuted">Escolha quem está testando. Os dados ficam apenas neste aparelho até o Supabase ser conectado.</AppText>
+            <AppText variant="bodyMuted">Teste o controle pessoal sem afetar os dados da sua conta. O modo de demonstração fica somente neste aparelho.</AppText>
             <View style={styles.demoActions}>
-              <Pressable style={({ pressed }) => [styles.demoButton, pressed && styles.demoPressed]} onPress={() => void enterDemo('alberto', remember)}><AppText variant="section">Alberto</AppText><AppText variant="caption">Entrar como você</AppText></Pressable>
-              <Pressable style={({ pressed }) => [styles.demoButton, pressed && styles.demoPressed]} onPress={() => void enterDemo('thauane', remember)}><AppText variant="section">Thauane</AppText><AppText variant="caption">Entrar como ela</AppText></Pressable>
+              <Pressable style={({ pressed }) => [styles.demoButton, pressed && styles.demoPressed]} onPress={() => void enterDemo(remember)}><AppText variant="section">Abrir demonstração</AppText><AppText variant="caption">Perfil pessoal de Alberto</AppText></Pressable>
             </View>
           </View>
         ) : null}
-        <PwaInstallHint />
-        <AppText variant="caption" style={styles.security}>
-          {Platform.OS === 'web' ? 'Sessão protegida no navegador · A senha nunca é armazenada pelo app' : 'Sessão protegida no aparelho · Nenhuma senha é salva pelo app'}
-        </AppText>
+        <AppText variant="caption" style={styles.security}>Sessão protegida no aparelho · Nenhuma senha é salva pelo app</AppText>
       </Screen>
     </KeyboardAvoidingView>
   );
@@ -155,6 +183,7 @@ const styles = StyleSheet.create({
   resetCard: { minHeight: 112, borderRadius: radii.lg, backgroundColor: colors.mintDeep, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.mint, padding: spacing.lg, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
   resetIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.surfaceRaised, alignItems: 'center', justifyContent: 'center' },
   resetCopy: { flex: 1, gap: spacing.xs },
+  resend: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   demo: { backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.lg, gap: spacing.md },
   demoHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.mint },

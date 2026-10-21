@@ -13,9 +13,17 @@ module.exports = function withReleaseSigning(config) {
       'AUREVION_RELEASE_KEY_PASSWORD',
     ];
 
-    if (!requiredVariables.every((name) => process.env[name])) return gradleConfig;
-
     let source = gradleConfig.modResults.contents;
+    source = source
+      .replace(/\ndef aurevionReleaseKeystorePath[\s\S]*?def aurevionReleaseKeyPassword = System\.getenv\("AUREVION_RELEASE_KEY_PASSWORD"\)\n\n/, '\n')
+      .replace(/\n        release \{\n            storeFile file\(aurevionReleaseKeystorePath\)[\s\S]*?\n        \}/, '')
+      .replace(/(buildTypes \{[\s\S]*?release \{[\s\S]*?)signingConfig signingConfigs\.release/, '$1signingConfig signingConfigs.debug');
+
+    if (!requiredVariables.every((name) => process.env[name])) {
+      gradleConfig.modResults.contents = source;
+      return gradleConfig;
+    }
+
     const variables = `
 def aurevionReleaseKeystorePath = System.getenv("AUREVION_RELEASE_KEYSTORE_PATH")
 def aurevionReleaseKeystorePassword = System.getenv("AUREVION_RELEASE_KEYSTORE_PASSWORD")

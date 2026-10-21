@@ -1,28 +1,35 @@
 import { Eye, EyeOff, KeyRound } from 'lucide-react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { z } from 'zod';
 
 import { BrandMark } from '@/components/BrandMark';
 import { AppText, PrimaryButton, Screen } from '@/components/ui';
 import { radii, spacing, type } from '@/constants/theme';
+import { passwordPolicyError, passwordRequirements } from '@/lib/passwordPolicy';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 
 const passwordSchema = z.object({
-  password: z.string().min(10, 'A nova senha precisa ter pelo menos 10 caracteres.'),
+  password: z.string(),
   confirmation: z.string(),
-}).refine(({ password, confirmation }) => password === confirmation, { message: 'As senhas não coincidem.' });
+}).superRefine(({ password, confirmation }, context) => {
+  const policyError = passwordPolicyError(password);
+  if (policyError) context.addIssue({ code: 'custom', message: policyError, path: ['password'] });
+  if (password !== confirmation) context.addIssue({ code: 'custom', message: 'As senhas não coincidem.', path: ['confirmation'] });
+});
 
 export default function ResetPasswordScreen() {
   const { updateRecoveredPassword } = useAuth();
+  const { forced } = useLocalSearchParams<{ forced?: string }>();
   const { palette } = useAppTheme();
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const requirements = passwordRequirements(password);
 
   async function save() {
     const parsed = passwordSchema.safeParse({ password, confirmation });
@@ -40,11 +47,12 @@ export default function ResetPasswordScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={[styles.flex, { backgroundColor: palette.ink }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <KeyboardAvoidingView style={[styles.flex, { backgroundColor: palette.ink }]} behavior="height">
       <Screen contentStyle={styles.content}>
-        <View style={styles.brand}><BrandMark size={42} /><AppText variant="title">Criar nova senha</AppText><AppText variant="bodyMuted" style={styles.center}>Use uma senha exclusiva, com no mínimo 10 caracteres.</AppText></View>
+        <View style={styles.brand}><BrandMark size={42} /><AppText variant="title">{forced === 'true' ? 'Proteja seu acesso' : 'Criar nova senha'}</AppText><AppText variant="bodyMuted" style={styles.center}>{forced === 'true' ? 'A senha temporária funcionou. Defina agora uma senha exclusiva antes de acessar seus dados.' : 'Defina uma senha exclusiva para o Saldo.'}</AppText></View>
         <View style={styles.field}><AppText variant="label">Nova senha</AppText><View style={[styles.passwordField, { backgroundColor: palette.surface, borderColor: palette.lineSoft }]}><TextInput accessibilityLabel="Nova senha" autoComplete="new-password" secureTextEntry={!visible} placeholder="Nova senha" placeholderTextColor={palette.textDim} selectionColor={palette.mint} value={password} onChangeText={setPassword} style={[styles.input, { color: palette.text }]} /><Pressable onPress={() => setVisible((value) => !value)} hitSlop={12}>{visible ? <EyeOff size={20} color={palette.textMuted} /> : <Eye size={20} color={palette.textMuted} />}</Pressable></View></View>
         <View style={styles.field}><AppText variant="label">Confirmar senha</AppText><TextInput accessibilityLabel="Confirmar nova senha" autoComplete="new-password" secureTextEntry={!visible} placeholder="Repita a senha" placeholderTextColor={palette.textDim} selectionColor={palette.mint} value={confirmation} onChangeText={setConfirmation} style={[styles.singleInput, { backgroundColor: palette.surface, borderColor: palette.lineSoft, color: palette.text }]} /></View>
+        <View style={styles.requirements}>{requirements.map((item) => <View key={item.key} style={styles.requirement}><View style={[styles.requirementDot, { backgroundColor: item.met ? palette.mint : palette.textDim }]} /><AppText variant="caption" style={{ color: item.met ? palette.mint : palette.textMuted }}>{item.label}</AppText></View>)}</View>
         {error ? <AppText variant="label" style={{ color: palette.danger }}>{error}</AppText> : null}
         <PrimaryButton label="Salvar nova senha" loading={loading} onPress={() => void save()} icon={<KeyRound size={18} color={palette.ink} />} />
       </Screen>
@@ -61,4 +69,7 @@ const styles = StyleSheet.create({
   passwordField: { minHeight: 54, borderRadius: radii.md, borderWidth: 1, paddingRight: spacing.lg, flexDirection: 'row', alignItems: 'center' },
   input: { flex: 1, minHeight: 52, paddingHorizontal: spacing.lg, fontFamily: type.regular, fontSize: 16 },
   singleInput: { minHeight: 54, borderRadius: radii.md, borderWidth: 1, paddingHorizontal: spacing.lg, fontFamily: type.regular, fontSize: 16 },
+  requirements: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  requirement: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  requirementDot: { width: 6, height: 6, borderRadius: 3 },
 });

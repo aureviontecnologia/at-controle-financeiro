@@ -14,7 +14,6 @@ export function TransactionRow({ item, hidden = false }: { item: Transaction; hi
   const visualIncome = income || (item.kind === 'adjustment' && item.adjustmentDirection === 'in');
   const cashOut = expense || item.kind === 'card_payment' || item.kind === 'debt_payment' || (item.kind === 'adjustment' && item.adjustmentDirection === 'out');
   const Icon = item.kind === 'internal_transfer' ? ArrowLeftRight : item.kind === 'card_purchase' ? CreditCard : visualIncome ? ArrowDownLeft : ArrowUpRight;
-  const owner = item.createdBy === 'alberto' ? 'Alberto' : 'Thauane';
   return (
     <View style={styles.row}>
       <View style={[styles.icon, { backgroundColor: visualIncome ? palette.mintDeep : item.kind === 'internal_transfer' ? palette.skyDeep : palette.surfaceRaised }]}>
@@ -22,7 +21,7 @@ export function TransactionRow({ item, hidden = false }: { item: Transaction; hi
       </View>
       <View style={styles.copy}>
         <AppText variant="body" numberOfLines={1}>{item.description}</AppText>
-        <AppText variant="caption" numberOfLines={1}>{item.category} · {item.paymentMethod} · por {owner}</AppText>
+        <AppText variant="caption" numberOfLines={1}>{item.category} · {item.paymentMethod}</AppText>
       </View>
       <View style={styles.amount}>
         <AppText variant="mono" style={visualIncome ? [styles.amountText, styles.income, { color: palette.mint }] : styles.amountText}>

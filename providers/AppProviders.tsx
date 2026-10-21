@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState, type PropsWithChildren } from 'react';
 
-import { configureSharedNotificationHandler } from '@/lib/notifications';
+import { configureNotificationHandler } from '@/lib/notifications';
 import { FinanceDataProvider } from '@/hooks/useFinanceData';
 
 import { AuthProvider } from './AuthProvider';
@@ -12,7 +12,7 @@ export function AppProviders({ children }: PropsWithChildren) {
   useEffect(() => {
     // Alguns aparelhos inicializam o serviço do Google depois do React Native.
     // A configuração de push é opcional e nunca deve encerrar o app.
-    try { configureSharedNotificationHandler(); } catch { /* aguarda nova tentativa ao ativar notificações */ }
+    try { configureNotificationHandler(); } catch { /* aguarda nova tentativa ao ativar notificações */ }
   }, []);
   const [queryClient] = useState(
     () =>

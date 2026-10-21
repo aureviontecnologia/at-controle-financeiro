@@ -2,7 +2,7 @@ import * as Crypto from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Check, CreditCard, Landmark, Repeat2, X } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { AppText, Pill, PrimaryButton, Screen, Surface } from '@/components/ui';
 import { radii, spacing, type } from '@/constants/theme';
@@ -66,27 +66,27 @@ export default function ScheduledExpenseScreen() {
           addLocalExpense({ amountCents: schedule.amountCents, description: schedule.title, category: schedule.category, sourceId: selectedSource.id, paymentMethod: method, paymentMethodDetail: detail, installmentCount: 1, createdBy: user.memberId, idempotencyKey: requestKey.current });
           markLocalPaid(schedule.id);
         } else {
-          if (!finance.householdId) throw new Error('A família ainda não sincronizou.');
+          if (!finance.householdId) throw new Error('Seu espaço financeiro ainda não sincronizou.');
           await payOnlineScheduledExpense({ householdId: finance.householdId, scheduleId: schedule.id, sourceId: selectedSource.id, sourceKind: selectedSource.sourceKind, paymentMethod: method, paymentMethodDetail: detail, amountCents: schedule.amountCents, description: schedule.title, idempotencyKey: requestKey.current });
         }
       } else if (user.demo) {
         addLocalSchedule({ title: title.trim(), category: 'Contas e assinaturas', dueDate: `${nextDueDate(dueDay)}T12:00:00-03:00`, amountCents, recurrence: recurring ? 'monthly' : 'once', paymentMethod: method, paymentMethodDetail: detail || undefined, defaultAccountId: selectedSource?.sourceKind === 'account' ? selectedSource.id : undefined, defaultCardId: selectedSource?.sourceKind === 'card' ? selectedSource.id : undefined });
       } else {
-        if (!finance.householdId) throw new Error('A família ainda não sincronizou.');
+        if (!finance.householdId) throw new Error('Seu espaço financeiro ainda não sincronizou.');
         await createOnlineScheduledExpense({ householdId: finance.householdId, userId: user.id, title, amountCents, dueDate: nextDueDate(dueDay), recurring, paymentMethod: method, paymentMethodDetail: detail, sourceId: selectedSource?.id, sourceKind: selectedSource?.sourceKind });
       }
       await finance.refresh(); router.back();
     } catch (reason) { Alert.alert('Não foi possível concluir', reason instanceof Error ? reason.message : 'Tente novamente.'); setSaving(false); }
   }
 
-  return <KeyboardAvoidingView style={[styles.flex, { backgroundColor: palette.ink }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><Screen>
+  return <KeyboardAvoidingView style={[styles.flex, { backgroundColor: palette.ink }]} behavior="height"><Screen>
     <View style={styles.header}><Pressable accessibilityLabel="Fechar" onPress={() => router.back()} style={[styles.close, { backgroundColor: palette.surface }]}><X size={20} color={palette.text} /></Pressable><AppText variant="section">{paying ? 'Conta ou assinatura' : 'Nova conta ou assinatura'}</AppText><View style={styles.close} /></View>
     {paying && schedule ? <Surface style={styles.summary}><View style={styles.statusLine}><View style={[styles.bigIcon, { backgroundColor: schedule.paid ? palette.mintDeep : palette.skyDeep }]}><Repeat2 size={24} color={schedule.paid ? palette.mint : palette.sky} /></View><Pill tone={schedule.paid ? 'mint' : 'amber'}>{schedule.paid ? 'PAGA' : 'PENDENTE'}</Pill></View><View style={styles.summaryCopy}><AppText variant="title">{schedule.title}</AppText><AppText variant="bodyMuted">{schedule.recurrence === 'monthly' ? 'Assinatura mensal' : 'Conta única'} · vence {formatDate(schedule.dueDate)}</AppText></View><AppText variant="display">{formatMoney(schedule.amountCents)}</AppText>{schedule.lastPaidAt ? <AppText variant="caption">Último pagamento: {formatDate(schedule.lastPaidAt)} · {paymentMethods.find((item) => item.id === schedule.paymentMethod)?.name ?? schedule.paymentMethodDetail ?? 'forma registrada'}</AppText> : <AppText variant="caption">Ainda não foi paga. Toque no botão abaixo para escolher como pagar.</AppText>}</Surface> : <Surface style={styles.form}><Field label="Nome" value={title} onChangeText={setTitle} placeholder="Ex.: Netflix, internet, energia" /><MoneyField value={amountCents} onChange={setAmountCents} /><View style={styles.field}><AppText variant="label">Dia do mês</AppText><TextInput keyboardType="number-pad" maxLength={2} value={String(dueDay)} onChangeText={(value) => setDueDay(Number(value.replace(/\D/g, '')) || 0)} style={[styles.input, { backgroundColor: palette.surfaceRaised, color: palette.text }]} /></View><Pressable onPress={() => setRecurring((value) => !value)} style={[styles.choice, { borderColor: recurring ? palette.mint : palette.line }]}><Repeat2 size={19} color={recurring ? palette.mint : palette.textMuted} /><View style={styles.choiceCopy}><AppText variant="body">Repetir todo mês</AppText><AppText variant="caption">Ao pagar, o próximo vencimento é criado automaticamente.</AppText></View>{recurring ? <Check size={18} color={palette.mint} /> : null}</Pressable></Surface>}
     <View style={styles.field}><AppText variant="label">FORMA DE PAGAMENTO</AppText><View style={styles.options}>{paymentMethods.map((item) => <Pressable key={item.id} onPress={() => { setMethod(item.id); if (item.id === 'ticket') setDetail('Ticket'); else if (method === 'ticket') setDetail(''); }} style={[styles.method, { backgroundColor: method === item.id ? palette.mintDeep : palette.surface, borderColor: method === item.id ? palette.mint : palette.lineSoft }]}><AppText variant="label" style={{ color: method === item.id ? palette.mint : palette.text }}>{item.name}</AppText></Pressable>)}</View></View>
     {method === 'other' ? <Field label="Como foi pago?" value={detail} onChangeText={setDetail} placeholder="Ex.: vale-alimentação" /> : null}
     <View style={styles.field}><AppText variant="label">{method === 'credit_card' ? 'CARTÃO' : 'CONTA OU DINHEIRO'}</AppText><View style={styles.sources}>{sources.map((item) => <Pressable key={item.id} onPress={() => setSourceId(item.id)} style={[styles.choice, { backgroundColor: palette.surface, borderColor: sourceId === item.id ? palette.mint : palette.lineSoft }]}>{item.sourceKind === 'card' ? <CreditCard size={19} color={palette.sky} /> : <Landmark size={19} color={palette.mint} />}<View style={styles.choiceCopy}><AppText variant="body">{item.name}</AppText><AppText variant="caption">{item.detail}</AppText></View>{sourceId === item.id ? <Check size={18} color={palette.mint} /> : null}</Pressable>)}</View></View>
     {schedule?.paid ? <Surface style={styles.paid}><Check size={20} color={palette.mint} /><View style={styles.choiceCopy}><AppText variant="section">Pagamento concluído</AppText><AppText variant="caption">O gasto já foi lançado e esta conta não entra mais na projeção.</AppText></View></Surface> : <PrimaryButton label={paying ? 'Marcar como paga e lançar gasto' : 'Salvar conta ou assinatura'} loading={saving} onPress={() => void submit()} />}
-    <AppText variant="caption" style={styles.note}>{paying ? 'O pagamento desconta da conta ou aumenta a fatura do cartão escolhido. Assinaturas avançam para o próximo mês.' : 'A forma de pagamento pode ser alterada quando vocês confirmarem o pagamento.'}</AppText>
+    <AppText variant="caption" style={styles.note}>{paying ? 'O pagamento desconta da conta ou aumenta a fatura do cartão escolhido. Assinaturas avançam para o próximo mês.' : 'A forma de pagamento pode ser alterada quando você confirmar o pagamento.'}</AppText>
   </Screen></KeyboardAvoidingView>;
 }
 

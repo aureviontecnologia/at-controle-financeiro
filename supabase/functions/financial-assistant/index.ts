@@ -31,7 +31,8 @@ async function sha256(value: string) {
 
 type ProposedAction =
   | { kind: 'set_monthly_goal'; summary: string; amountCents: number; targetDay: number }
-  | { kind: 'prepare_expense'; summary: string; amountCents: number; description: string; category: string };
+  | { kind: 'prepare_expense'; summary: string; amountCents: number; description: string; category: string }
+  | { kind: 'prepare_income'; summary: string; amountCents: number; description: string; category: string };
 
 function cleanProposedAction(value: unknown): ProposedAction | null {
   if (!value || typeof value !== 'object') return null;
@@ -44,7 +45,7 @@ function cleanProposedAction(value: unknown): ProposedAction | null {
     const targetDay = typeof action.target_day === 'number' && Number.isInteger(action.target_day) ? action.target_day : 0;
     return targetDay >= 1 && targetDay <= 31 ? { kind, summary, amountCents, targetDay } : null;
   }
-  if (kind === 'prepare_expense') {
+  if (kind === 'prepare_expense' || kind === 'prepare_income') {
     const description = typeof action.description === 'string' ? action.description.trim().slice(0, 120) : '';
     const category = typeof action.category === 'string' ? action.category.trim().slice(0, 60) : '';
     return description && category ? { kind, summary, amountCents, description, category } : null;
@@ -79,11 +80,13 @@ Deno.serve(async (request) => {
   if (Number(chatContext.minute_count ?? 0) >= 12 || Number(chatContext.day_count ?? 0) >= 100) return response(request, { error: 'rate_limit', message: 'O limite gratuito do assistente foi atingido. Tente mais tarde.' }, 429);
 
   const requestHash = await sha256(`${userData.user.id}:${conversationId}:${question}`);
-  const systemPrompt = `Você é o assistente pessoal e financeiro da família A&T. Converse naturalmente em português brasileiro: cumprimente, responda a conversa cotidiana e demonstre atenção, sem forçar números em todo assunto. Quando a pergunta envolver dinheiro, use apenas o contexto sincronizado; investigue padrões, categorias, variações, compromissos, saldos e faturas, explique suas conclusões e diga quando faltam dados. Seja acolhedor, direto, não julgador e tenha no máximo 180 palavras.
+  const systemPrompt = `Você é o assistente pessoal financeiro de Alberto dentro do Saldo. Converse naturalmente em português brasileiro: cumprimente, responda perguntas cotidianas e seja útil sem forçar números em todo assunto. Quando a pergunta envolver dinheiro, use somente o contexto sincronizado. Analise tendências, categorias, recorrências, variações, gastos atípicos, limites, vencimentos, entradas e fluxo de caixa. Compare períodos apenas quando existirem dados suficientes e sempre cite os valores que sustentam a conclusão. Diga com clareza quando faltarem dados.
 
-Regras financeiras: Alberto e Thauane são uma única unidade; nunca invente dívida, reembolso ou divisão entre eles. Transferência interna não é receita nem despesa. Valores estão em centavos BRL. Diferencie saldo, limite, fatura, dívida externa e projeção. Não prometa retorno nem dê recomendação jurídica, tributária, de crédito ou investimento.
+Tom: acolhedor, direto, não julgador e específico. Priorize uma conclusão curta, a evidência e um próximo passo realista. Sugira no máximo duas ações para não gerar ansiedade. Não repita avisos genéricos. Responda em até 220 palavras.
 
-Ações: nunca afirme que alterou dados. Só proponha ação quando o usuário pedir explicitamente. Ações permitidas: definir meta mensal ou preparar um gasto para revisão. Se faltarem valor/dia/descrição/categoria, faça uma pergunta e use kind "none". Toda proposta será mostrada ao usuário e só será executada após confirmação separada no aplicativo.`;
+Regras financeiras: transferência entre contas do próprio Alberto não é receita nem despesa. Valores estão em centavos BRL. Diferencie saldo, limite disponível, fatura, dívida externa, ticket e projeção. Ticket não paga faturas e não entra no saldo monetário. Nunca invente valores, dívidas, renda, categorias ou datas. Não prometa retorno nem ofereça recomendação jurídica, tributária, de crédito ou investimento.
+
+Ações: nunca afirme que alterou dados. Só proponha ação quando Alberto pedir explicitamente. Ações permitidas: definir meta mensal, preparar gasto ou preparar entrada de renda (incluindo entregas/iFood, vendas e renda extra). Se faltarem valor/dia/descrição/categoria, faça uma pergunta e use kind "none". Toda proposta será exibida e só será executada após confirmação separada no aplicativo.`;
   const conversationHistory = (Array.isArray(chatContext.messages) ? chatContext.messages : []).map((item: { role?: unknown; content?: unknown }) => ({ role: item.role === 'assistant' ? 'assistant' : 'user', content: String(item.content ?? '').slice(0, 4000) }));
 
   let groqResponse: Response;
@@ -109,7 +112,7 @@ Ações: nunca afirme que alterou dados. Só proponha ação quando o usuário p
                   type: 'object',
                   additionalProperties: false,
                   properties: {
-                    kind: { type: 'string', enum: ['none', 'set_monthly_goal', 'prepare_expense'] },
+                    kind: { type: 'string', enum: ['none', 'set_monthly_goal', 'prepare_expense', 'prepare_income'] },
                     summary: { type: 'string' },
                     amount_cents: { type: ['integer', 'null'] },
                     target_day: { type: ['integer', 'null'] },
@@ -124,7 +127,8 @@ Ações: nunca afirme que alterou dados. Só proponha ação quando o usuário p
           },
         },
         messages: [
-          { role: 'system', content: `${systemPrompt}\n\nContexto financeiro agregado atual: ${JSON.stringify(context)}` },
+          { role: 'system', content: systemPrompt },
+          { role: 'system', content: `Contexto financeiro agregado atual: ${JSON.stringify(context)}` },
           ...conversationHistory,
           { role: 'user', content: question },
         ],

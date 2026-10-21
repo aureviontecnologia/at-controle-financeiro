@@ -9,7 +9,7 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
-import { Alert, AppState, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, AppState, Modal, Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText, PrimaryButton } from '@/components/ui';
 import { radii, spacing } from '@/constants/theme';
@@ -43,10 +43,6 @@ export function UpdateProvider({ children }: PropsWithChildren) {
 
   const check = useCallback(async (manual: boolean) => {
     if (checkingRef.current) return;
-    if (Platform.OS === 'web') {
-      if (manual) Alert.alert('Atualizações automáticas', 'No iPhone, a versão mais recente é carregada automaticamente ao abrir o aplicativo.');
-      return;
-    }
     checkingRef.current = true;
     setIsChecking(true);
     try {
@@ -65,7 +61,6 @@ export function UpdateProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
-    if (Platform.OS === 'web') return undefined;
     const timer = setTimeout(() => void check(false), 2_500);
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active' && Date.now() - lastCheckedAt.current >= AUTO_CHECK_INTERVAL_MS) {
@@ -83,7 +78,7 @@ export function UpdateProvider({ children }: PropsWithChildren) {
     if (isExpoGo) {
       Alert.alert(
         'Atualização do APK',
-        'No Expo Go, o aplicativo instalado é o próprio Expo Go. A página da versão será aberta; no Samsung, use o APK do A&T para receber este fluxo automático.',
+        'No Expo Go, o aplicativo instalado é o próprio Expo Go. A página da versão será aberta; no Samsung, use o APK do Saldo. para receber este fluxo automático.',
         [
           { text: 'Cancelar', style: 'cancel' },
           { text: 'Abrir versão', onPress: () => void downloadAndOpenInstaller(available) },

@@ -10,7 +10,7 @@ export default function NotFoundScreen() {
       <View style={styles.copy}>
         <AppText variant="label">CAMINHO NÃO ENCONTRADO</AppText>
         <AppText variant="title">Esta tela não existe.</AppText>
-        <AppText variant="bodyMuted">Volte ao início para continuar cuidando das finanças de vocês.</AppText>
+        <AppText variant="bodyMuted">Volte ao início para continuar cuidando das suas finanças.</AppText>
       </View>
       <PrimaryButton label="Ir para o início" onPress={() => router.replace('/')} />
     </Screen>

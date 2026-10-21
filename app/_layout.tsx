@@ -5,7 +5,7 @@ import * as NavigationBar from 'expo-navigation-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '@/constants/theme';
 import { AppProviders } from '@/providers/AppProviders';
@@ -56,8 +56,6 @@ function AppNavigator() {
   const { palette } = useAppTheme();
 
   useEffect(() => {
-    if (Platform.OS !== 'android') return;
-
     void Promise.all([
       NavigationBar.setVisibilityAsync('visible'),
       NavigationBar.setButtonStyleAsync('light'),
@@ -73,15 +71,19 @@ function AppNavigator() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="reset-password" />
+        <Stack.Screen name="change-password" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="quick-expense" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="quick-income" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="accounts" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="account-details" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="cards" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="pay-card-statement" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="members" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="security" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="monthly-goal" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="daily-limit" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="scheduled-expense" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="future-income" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="confirm-ticket-reload" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
     </>
   );

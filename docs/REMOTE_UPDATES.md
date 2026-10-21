@@ -36,9 +36,11 @@ O workflow exige os seguintes Actions Secrets:
 - `ANDROID_KEY_PASSWORD`
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+- `EXPO_PUBLIC_EXPO_PROJECT_ID`
+- `GOOGLE_SERVICES_JSON_BASE64`
 
 A chave de assinatura nunca deve entrar no Git, nos artefatos ou nos logs. Uma troca da chave impede que o Android aceite a atualização sobre uma instalação existente.
 
-## Expo Go e iPhone
+## Somente Android
 
-Expo Go executa o projeto dentro de outro aplicativo. Portanto, ele não pode instalar nem atualizar o APK do A&T. Durante o desenvolvimento ele carrega o bundle oferecido pelo servidor do QR. No iPhone, um aplicativo independente requer um build iOS assinado; distribuição estável normalmente passa por TestFlight/App Store e pelas regras da Apple.
+PWA, web e iOS estão desativados. O Android independente consulta a Release do GitHub e solicita confirmação do sistema antes de instalar um APK assinado.

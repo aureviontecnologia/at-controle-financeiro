@@ -1,48 +1,27 @@
 import { Platform } from 'react-native';
 
 export const colors = {
-  ink: '#070A0C',
-  surface: '#101619',
-  surfaceRaised: '#172024',
-  surfacePressed: '#1D292D',
-  line: '#253136',
-  lineSoft: '#1B2428',
-  text: '#F2F6F4',
-  textMuted: '#8E9B98',
-  textDim: '#61706C',
-  mint: '#79E2B3',
-  mintDeep: '#173B2E',
-  sky: '#82B5FF',
-  skyDeep: '#172C46',
-  amber: '#F1B96B',
-  amberDeep: '#3A2B18',
-  danger: '#FF8F8F',
-  dangerDeep: '#3D2022',
+  ink: '#090B0C',
+  surface: '#111416',
+  surfaceRaised: '#171B1D',
+  surfacePressed: '#1D2225',
+  line: '#2B3134',
+  lineSoft: '#202528',
+  text: '#F5F7F6',
+  textMuted: '#9AA29F',
+  textDim: '#68716D',
+  mint: '#8BE3B6',
+  mintDeep: '#153429',
+  sky: '#B7C9C0',
+  skyDeep: '#202B26',
+  amber: '#D8BD86',
+  amberDeep: '#31291B',
+  danger: '#FF9696',
+  dangerDeep: '#392022',
   white: '#FFFFFF',
 } as const;
 
 export type AppColors = { [Key in keyof typeof colors]: string };
-
-export const strawberryColors: AppColors = {
-  ink: '#12070D',
-  surface: '#1D0E16',
-  surfaceRaised: '#29131F',
-  surfacePressed: '#351827',
-  line: '#5A2940',
-  lineSoft: '#351925',
-  text: '#FFF7FA',
-  textMuted: '#D6A8B9',
-  textDim: '#9F7184',
-  mint: '#FF5F91',
-  mintDeep: '#4A1028',
-  sky: '#FFACC7',
-  skyDeep: '#431327',
-  amber: '#FFE08F',
-  amberDeep: '#3A2B19',
-  danger: '#FF7B91',
-  dangerDeep: '#481622',
-  white: '#FFFFFF',
-};
 
 export const spacing = {
   xs: 4,
@@ -55,9 +34,9 @@ export const spacing = {
 } as const;
 
 export const radii = {
-  sm: 10,
-  md: 16,
-  lg: 22,
+  sm: 8,
+  md: 12,
+  lg: 16,
   pill: 999,
 } as const;
 

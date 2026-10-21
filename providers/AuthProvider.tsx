@@ -2,7 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as Linking from 'expo-linking';
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState } from 'react-native';
 
 import { hasSupabaseConfig, setRememberSession, supabase } from '@/lib/supabase';
 import { touchOnlinePresence } from '@/lib/financialRepository';
@@ -14,6 +14,7 @@ type AuthUser = {
   name: string;
   email?: string;
   demo: boolean;
+  mustChangePassword: boolean;
 };
 
 type LoginInput = { email: string; password: string; remember: boolean };
@@ -24,15 +25,17 @@ type AuthContextValue = {
   loading: boolean;
   configured: boolean;
   signIn: (input: LoginInput) => Promise<void>;
-  enterDemo: (memberId: MemberId, remember: boolean) => Promise<void>;
+  enterDemo: (remember: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   confirmPasswordReset: (input: ConfirmResetInput) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   updateRecoveredPassword: (password: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 const DEMO_KEY = 'aurevion.demo-user';
+export const PERSONAL_ACCOUNT_EMAIL = 'albertocoutodev@gmail.com';
 
 type PasswordResetError = {
   code?: string;
@@ -41,9 +44,6 @@ type PasswordResetError = {
 };
 
 function passwordResetRedirectUrl() {
-  if (Platform.OS === 'web' && typeof globalThis.location?.origin === 'string') {
-    return `${globalThis.location.origin}/reset-password`;
-  }
   return Linking.createURL('reset-password');
 }
 
@@ -58,32 +58,26 @@ function passwordResetErrorMessage(error: PasswordResetError) {
   return 'Não foi possível enviar o email de recuperação agora. Verifique a conexão e tente novamente.';
 }
 
-function webStorage() {
-  return Platform.OS === 'web' && typeof localStorage !== 'undefined' ? localStorage : null;
-}
-
 async function readDemoUser() {
-  if (Platform.OS === 'web') return webStorage()?.getItem(DEMO_KEY) ?? null;
   return SecureStore.getItemAsync(DEMO_KEY);
 }
 
 async function writeDemoUser(value: string) {
-  if (Platform.OS === 'web') webStorage()?.setItem(DEMO_KEY, value);
-  else await SecureStore.setItemAsync(DEMO_KEY, value);
+  await SecureStore.setItemAsync(DEMO_KEY, value);
 }
 
 async function deleteDemoUser() {
-  if (Platform.OS === 'web') webStorage()?.removeItem(DEMO_KEY);
-  else await SecureStore.deleteItemAsync(DEMO_KEY);
+  await SecureStore.deleteItemAsync(DEMO_KEY);
 }
 
 function userFromSession(session: Session): AuthUser {
   const email = session.user.email?.toLocaleLowerCase('pt-BR');
-  const knownName = email === 'thauane.oliveira0515@gmail.com' ? 'Thauane' : email === 'albertocoutodev@gmail.com' ? 'Alberto' : undefined;
-  const name = String(knownName ?? session.user.user_metadata?.full_name ?? session.user.email?.split('@')[0] ?? 'Membro');
-  const normalized = name.toLocaleLowerCase('pt-BR');
-  const memberId: MemberId = normalized.includes('thauane') ? 'thauane' : 'alberto';
-  return { id: session.user.id, memberId, name, email: session.user.email, demo: false };
+  const name = String(email === PERSONAL_ACCOUNT_EMAIL ? 'Alberto' : session.user.user_metadata?.full_name ?? session.user.email?.split('@')[0] ?? 'Alberto');
+  return { id: session.user.id, memberId: 'alberto', name, email: session.user.email, demo: false, mustChangePassword: session.user.user_metadata?.must_change_password === true };
+}
+
+function isPersonalSession(session: Session | null): session is Session {
+  return session?.user.email?.trim().toLocaleLowerCase('pt-BR') === PERSONAL_ACCOUNT_EMAIL;
 }
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -96,7 +90,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       try {
         if (supabase) {
           const { data } = await supabase.auth.getSession();
-          if (active && data.session) setUser(userFromSession(data.session));
+          if (active && isPersonalSession(data.session)) setUser(userFromSession(data.session));
+          else if (data.session) await supabase.auth.signOut({ scope: 'local' });
         } else {
           const saved = await readDemoUser();
           if (active && saved) setUser(JSON.parse(saved) as AuthUser);
@@ -110,7 +105,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
     void restore();
     const subscription = supabase?.auth.onAuthStateChange((_event, session) => {
-      setUser(session ? userFromSession(session) : null);
+      setUser(isPersonalSession(session) ? userFromSession(session) : null);
       setLoading(false);
     }).data.subscription;
     async function handleAuthUrl(url: string) {
@@ -151,18 +146,21 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const signIn = useCallback(async ({ email, password, remember }: LoginInput) => {
     if (!supabase) throw new Error('Conecte o projeto gratuito do Supabase para usar o login real.');
+    const normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail !== PERSONAL_ACCOUNT_EMAIL) throw new Error('Este aplicativo é pessoal. Entre com o email de Alberto.');
     await setRememberSession(remember);
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
     if (error) throw new Error(error.message === 'Invalid login credentials' ? 'Email ou senha incorretos.' : 'Não foi possível entrar agora.');
     if (data.session) setUser(userFromSession(data.session));
   }, []);
 
-  const enterDemo = useCallback(async (memberId: MemberId, remember: boolean) => {
+  const enterDemo = useCallback(async (remember: boolean) => {
     const demoUser: AuthUser = {
-      id: `demo-${memberId}`,
-      memberId,
-      name: memberId === 'alberto' ? 'Alberto' : 'Thauane',
+      id: 'demo-alberto',
+      memberId: 'alberto',
+      name: 'Alberto',
       demo: true,
+      mustChangePassword: false,
     };
     setUser(demoUser);
     if (remember) await writeDemoUser(JSON.stringify(demoUser));
@@ -177,7 +175,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const requestPasswordReset = useCallback(async (email: string) => {
     if (!supabase) throw new Error('A recuperação estará disponível após conectar o Supabase.');
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail !== PERSONAL_ACCOUNT_EMAIL) throw new Error('Use o email pessoal de Alberto para recuperar o acesso.');
+    const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
       redirectTo: passwordResetRedirectUrl(),
     });
     if (error) throw new Error(passwordResetErrorMessage(error));
@@ -185,32 +185,45 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const confirmPasswordReset = useCallback(async ({ email, code, password }: ConfirmResetInput) => {
     if (!supabase) throw new Error('A recuperação estará disponível após conectar o Supabase.');
+    const normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail !== PERSONAL_ACCOUNT_EMAIL) throw new Error('Use o email pessoal de Alberto para recuperar o acesso.');
     const { error: verifyError } = await supabase.auth.verifyOtp({
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
       token: code.trim(),
       type: 'recovery',
     });
     if (verifyError) throw new Error('Código inválido ou expirado. Peça um novo código.');
 
-    const { error: updateError } = await supabase.auth.updateUser({ password });
+    const { error: updateError } = await supabase.auth.updateUser({ password, data: { must_change_password: false } });
     if (updateError) throw new Error('A nova senha não atende à política de segurança.');
     await supabase.auth.signOut({ scope: 'local' });
     setUser(null);
+  }, []);
+
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    if (!supabase) throw new Error('A troca de senha estará disponível após conectar o Supabase.');
+    const { data: sessionData } = await supabase.auth.getSession();
+    const email = sessionData.session?.user.email?.trim().toLowerCase();
+    if (email !== PERSONAL_ACCOUNT_EMAIL) throw new Error('Sua sessão expirou. Entre novamente para trocar a senha.');
+    const { error: verifyError } = await supabase.auth.signInWithPassword({ email, password: currentPassword });
+    if (verifyError) throw new Error('A senha atual está incorreta.');
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword, data: { must_change_password: false } });
+    if (updateError) throw new Error('Não foi possível salvar a nova senha. Escolha outra senha forte.');
   }, []);
 
   const updateRecoveredPassword = useCallback(async (password: string) => {
     if (!supabase) throw new Error('A recuperação estará disponível após conectar o Supabase.');
     const { data: sessionData } = await supabase.auth.getSession();
     if (!sessionData.session) throw new Error('O link de recuperação expirou ou não foi validado. Volte ao login e envie outro email.');
-    const { error } = await supabase.auth.updateUser({ password });
+    const { error } = await supabase.auth.updateUser({ password, data: { must_change_password: false } });
     if (error) throw new Error('A nova senha não atende à política de segurança.');
     await supabase.auth.signOut({ scope: 'local' });
     setUser(null);
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, configured: hasSupabaseConfig, signIn, enterDemo, signOut, requestPasswordReset, confirmPasswordReset, updateRecoveredPassword }),
-    [user, loading, signIn, enterDemo, signOut, requestPasswordReset, confirmPasswordReset, updateRecoveredPassword],
+    () => ({ user, loading, configured: hasSupabaseConfig, signIn, enterDemo, signOut, requestPasswordReset, confirmPasswordReset, changePassword, updateRecoveredPassword }),
+    [user, loading, signIn, enterDemo, signOut, requestPasswordReset, confirmPasswordReset, changePassword, updateRecoveredPassword],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -9,7 +9,7 @@ export default function Index() {
   if (loading) {
     return <View style={styles.loading}><ActivityIndicator color={colors.mint} /></View>;
   }
-  return <Redirect href={user ? '/(tabs)' : '/(auth)/login'} />;
+  return <Redirect href={user?.mustChangePassword ? '/reset-password?forced=true' : user ? '/(tabs)' : '/(auth)/login'} />;
 }
 
 const styles = StyleSheet.create({ loading: { flex: 1, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' } });

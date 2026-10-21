@@ -24,6 +24,7 @@ export type Account = {
   reservedCents?: number;
   expectedReloadDay?: number;
   expectedReloadCents?: number;
+  lastReloadConfirmedMonth?: string;
   active: boolean;
 };
 
@@ -53,8 +54,21 @@ export type CreditCard = {
     id: string;
     dueDate: string;
     amountCents: number;
+    totalCents?: number;
+    paidCents?: number;
     status: 'open' | 'partially_paid' | 'paid' | 'overdue';
   }>;
+};
+
+export type FutureIncome = {
+  id: string;
+  ownerId: MemberId;
+  title: string;
+  amountCents: number;
+  expectedDate: string;
+  destinationType: 'account' | 'ticket';
+  accountId?: string;
+  recurrence: 'once' | 'monthly';
 };
 
 export type TransactionKind =
@@ -146,4 +160,5 @@ export type AiMessage = {
 
 export type AssistantProposal =
   | { kind: 'set_monthly_goal'; summary: string; amountCents: number; targetDay: number }
-  | { kind: 'prepare_expense'; summary: string; amountCents: number; description: string; category: string };
+  | { kind: 'prepare_expense'; summary: string; amountCents: number; description: string; category: string }
+  | { kind: 'prepare_income'; summary: string; amountCents: number; description: string; category: string };

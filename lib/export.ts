@@ -1,7 +1,7 @@
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
-import type { Account, Budget, CreditCard, ExternalDebt, Transaction, UpcomingExpense } from './types';
+import type { Account, Budget, CreditCard, ExternalDebt, FutureIncome, MonthlyGoal, SavingsPot, Transaction, UpcomingExpense } from './types';
 
 type ExportData = {
   accounts: Account[];
@@ -10,6 +10,10 @@ type ExportData = {
   upcoming: UpcomingExpense[];
   budgets: Budget[];
   debts: ExternalDebt[];
+  savingsPots: SavingsPot[];
+  futureIncomes: FutureIncome[];
+  monthlyGoal: MonthlyGoal | null;
+  dailySpendLimitCents: number;
 };
 
 function csvCell(value: unknown) {
@@ -18,7 +22,7 @@ function csvCell(value: unknown) {
 
 export async function exportFinancialData(data: ExportData, format: 'json' | 'csv') {
   const date = new Date().toISOString().slice(0, 10);
-  const file = new File(Paths.cache, `at-controle-financeiro-${date}.${format}`);
+  const file = new File(Paths.cache, `saldo-${date}.${format}`);
   file.create({ overwrite: true });
   if (format === 'json') {
     file.write(JSON.stringify({ exportedAt: new Date().toISOString(), currency: 'BRL', ...data }, null, 2));
@@ -28,7 +32,7 @@ export async function exportFinancialData(data: ExportData, format: 'json' | 'cs
     file.write([header.map(csvCell).join(','), ...rows].join('\n'));
   }
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(file.uri, { mimeType: format === 'json' ? 'application/json' : 'text/csv', dialogTitle: 'Exportar dados A&T' });
+    await Sharing.shareAsync(file.uri, { mimeType: format === 'json' ? 'application/json' : 'text/csv', dialogTitle: 'Exportar dados do Saldo.' });
   }
   return file.uri;
 }

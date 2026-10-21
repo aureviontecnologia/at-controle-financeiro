@@ -16,4 +16,4 @@ config.expo.version = version;
 config.expo.android.versionCode = versionCode;
 await writeFile(path, `${JSON.stringify(config, null, 2)}\n`);
 
-console.log(`Preparado A&T ${version} (${versionCode}).`);
+console.log(`Preparado Saldo ${version} (${versionCode}).`);

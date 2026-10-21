@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { CalendarDays, Target, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { AppText, PrimaryButton, Screen, Surface } from '@/components/ui';
 import { radii, spacing } from '@/constants/theme';
@@ -55,12 +55,12 @@ export default function MonthlyGoalScreen() {
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.flex, { backgroundColor: palette.ink }]}>
+    <KeyboardAvoidingView behavior="height" style={[styles.flex, { backgroundColor: palette.ink }]}>
       <Screen>
         <View style={styles.header}><Pressable accessibilityRole="button" accessibilityLabel="Fechar meta" onPress={() => router.back()} style={[styles.close, { backgroundColor: palette.surface }]}><X size={22} color={palette.text} /></Pressable><View style={styles.headerCopy}><AppText variant="title">Meta do mês</AppText><AppText variant="caption">COMPARTILHADA PELO CASAL</AppText></View><View style={styles.headerSpacer} /></View>
         <Surface style={styles.card}>
           <View style={[styles.icon, { backgroundColor: palette.mintDeep }]}><Target size={24} color={palette.mint} /></View>
-          <View><AppText variant="section">Quanto querem alcançar?</AppText><AppText variant="bodyMuted">A meta compara o valor escolhido com a posição líquida do casal.</AppText></View>
+          <View><AppText variant="section">Quanto você quer alcançar?</AppText><AppText variant="bodyMuted">A meta compara o valor escolhido com sua posição líquida.</AppText></View>
           <View style={[styles.inputGroup, { borderBottomColor: palette.line }]}><AppText variant="label">VALOR DA META</AppText><View style={styles.amountRow}><AppText variant="title" style={{ color: palette.textMuted }}>R$</AppText><TextInput accessibilityLabel="Valor da meta" autoFocus keyboardType="number-pad" value={formatCentsInput(targetCents)} onChangeText={(value) => setTargetCents(parseBrlToCents(value))} selectionColor={palette.mint} style={[styles.amountInput, { color: palette.text }]} /></View></View>
           <View style={styles.dayRow}><View style={[styles.dayIcon, { backgroundColor: palette.skyDeep }]}><CalendarDays size={19} color={palette.sky} /></View><View style={styles.dayCopy}><AppText variant="body">Dia limite</AppText><AppText variant="caption">Se o mês for menor, usamos o último dia.</AppText></View><TextInput accessibilityLabel="Dia limite da meta" keyboardType="number-pad" maxLength={2} value={targetDay} onChangeText={setTargetDay} selectionColor={palette.mint} style={[styles.dayInput, { color: palette.text, borderColor: palette.line }]} /></View>
         </Surface>

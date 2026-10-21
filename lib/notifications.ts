@@ -1,7 +1,11 @@
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { dailyExpenseTotal } from './finance';
+import { formatMoney } from './format';
 import { supabase } from './supabase';
+import type { CreditCard, Transaction, UpcomingExpense } from './types';
+import { useFinanceStore } from '../store/useFinanceStore';
 
 const PUSH_API_URL = process.env.EXPO_PUBLIC_PUSH_API_URL ?? 'https://at-controle-financeiro-aurevion.aureviontecnologia.workers.dev';
 const EXPO_PROJECT_ID = process.env.EXPO_PUBLIC_EXPO_PROJECT_ID;
@@ -11,11 +15,11 @@ function nativeNotifications(): typeof import('expo-notifications') {
   return require('expo-notifications');
 }
 
-export type SharedNotificationPermission = 'granted' | 'denied' | 'prompt' | 'unavailable';
-export type PartnerActivity = { type: 'expense' | 'income' | 'transfer' | 'account' | 'card' | 'goal' | 'scheduled' | 'other'; amountCents: number; description: string };
+export type NotificationPermission = 'granted' | 'denied' | 'prompt' | 'unavailable';
+export type FinancialActivity = { type: 'expense' | 'income' | 'transfer' | 'account' | 'card' | 'goal' | 'scheduled' | 'daily_limit' | 'other'; amountCents: number; description: string };
 
-export function configureSharedNotificationHandler() {
-  if (handlerConfigured || Platform.OS === 'web') return;
+export function configureNotificationHandler() {
+  if (handlerConfigured) return;
   try {
     const ExpoNotifications = nativeNotifications();
     ExpoNotifications.setNotificationHandler({
@@ -41,59 +45,32 @@ async function sessionToken() {
 
 async function pushRequest(path: string, body: unknown) {
   const token = await sessionToken();
-  const response = await fetch(`${PUSH_API_URL}${path}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) throw new Error(response.status === 401 ? 'A sessão expirou. Entre novamente.' : 'O servidor de notificações não respondeu.');
-  return response.json();
-}
-
-function base64UrlToBytes(value: string) {
-  const padding = '='.repeat((4 - (value.length % 4)) % 4);
-  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = globalThis.atob(base64);
-  return Uint8Array.from(raw, (character) => character.charCodeAt(0));
-}
-
-async function registerWebPush(householdId: string) {
-  if (typeof window === 'undefined' || typeof navigator === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
-    throw new Error('Este navegador não oferece notificações em segundo plano. No iPhone, instale o PWA na Tela de Início primeiro.');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6_000);
+  try {
+    const response = await fetch(`${PUSH_API_URL}${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(response.status === 401 ? 'A sessão expirou. Entre novamente.' : 'O servidor de notificações não respondeu.');
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
   }
-  const permission = await window.Notification.requestPermission();
-  if (permission !== 'granted') throw new Error('A permissão de notificação não foi concedida.');
-
-  const keyResponse = await fetch(`${PUSH_API_URL}/api/push/public-key`, { cache: 'no-store' });
-  const keyData = await keyResponse.json();
-  if (!keyResponse.ok || typeof keyData?.publicKey !== 'string' || !keyData.publicKey) throw new Error('A chave de notificação do PWA não está disponível.');
-  const registration = await navigator.serviceWorker.ready;
-  let subscription = await registration.pushManager.getSubscription();
-  if (!subscription) subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlToBytes(keyData.publicKey) });
-  const json = subscription.toJSON();
-  if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) throw new Error('O navegador não concluiu a assinatura de notificação.');
-  await pushRequest('/api/push/register', {
-    householdId,
-    platform: 'web',
-    endpoint: json.endpoint,
-    p256dh: json.keys.p256dh,
-    auth: json.keys.auth,
-    deviceLabel: /iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'PWA no iPhone' : 'PWA no navegador',
-  });
 }
 
 async function registerNativePush(householdId: string) {
   const ExpoNotifications = nativeNotifications();
-  configureSharedNotificationHandler();
-  if (Platform.OS === 'android') {
-    await ExpoNotifications.setNotificationChannelAsync('shared-finances', {
-      name: 'Movimentações da família',
-      description: 'Entradas, gastos, transferências, contas, cartões e metas do casal.',
-      importance: ExpoNotifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 180, 100, 180],
-      sound: 'default',
-    });
-  }
+  configureNotificationHandler();
+  await ExpoNotifications.setNotificationChannelAsync('financas-pessoais', {
+    name: 'Finanças pessoais',
+    description: 'Confirmações de gastos, entradas, contas, cartões, metas e vencimentos.',
+    importance: ExpoNotifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 180, 100, 180],
+    sound: 'default',
+  });
   let permission = await ExpoNotifications.getPermissionsAsync();
   if (!permission.granted && permission.canAskAgain) permission = await ExpoNotifications.requestPermissionsAsync();
   if (!permission.granted) throw new Error('A permissão de notificação não foi concedida.');
@@ -103,27 +80,22 @@ async function registerNativePush(householdId: string) {
     householdId,
     platform: 'expo',
     token,
-    deviceLabel: `${Platform.OS === 'android' ? 'Android' : 'iOS'} · ${Constants.deviceName ?? 'A&T'}`,
+    deviceLabel: `Android · ${Constants.deviceName ?? 'Saldo.'}`,
   });
 }
 
-export async function prepareSharedExpenseNotifications(input: { householdId: string }) {
-  if (Platform.OS === 'web') await registerWebPush(input.householdId);
-  else await registerNativePush(input.householdId);
+export async function prepareFinancialNotifications(input: { householdId: string }) {
+  await registerNativePush(input.householdId);
   return true;
 }
 
-export async function disableSharedExpenseNotifications(input: { householdId: string }) {
-  await pushRequest('/api/push/unregister', { householdId: input.householdId, platform: Platform.OS === 'web' ? 'web' : 'expo' });
+export async function disableFinancialNotifications(input: { householdId: string }) {
+  await pushRequest('/api/push/unregister', { householdId: input.householdId, platform: 'expo' });
 }
 
-export async function getSharedNotificationPermission(): Promise<SharedNotificationPermission> {
-  if (Platform.OS === 'web') {
-    if (typeof window === 'undefined' || !('Notification' in window) || !('PushManager' in window)) return 'unavailable';
-    return window.Notification.permission === 'granted' ? 'granted' : window.Notification.permission === 'denied' ? 'denied' : 'prompt';
-  }
+export async function getNotificationPermission(): Promise<NotificationPermission> {
   try {
-    configureSharedNotificationHandler();
+    configureNotificationHandler();
     const ExpoNotifications = nativeNotifications();
     const permission = await ExpoNotifications.getPermissionsAsync();
     return permission.granted ? 'granted' : permission.canAskAgain ? 'prompt' : 'denied';
@@ -132,11 +104,77 @@ export async function getSharedNotificationPermission(): Promise<SharedNotificat
   }
 }
 
-export async function notifyPartnerActivity(householdId: string, event: PartnerActivity) {
+function activityCopy(event: FinancialActivity) {
+  const amount = formatMoney(event.amountCents);
+  const description = event.description.trim() || 'movimentação';
+  const copies: Record<FinancialActivity['type'], [string, string]> = {
+    expense: ['Gasto registrado', `${amount} · ${description}`],
+    income: ['Entrada registrada', `${amount} · ${description}`],
+    transfer: ['Transferência registrada', `${amount} · ${description}`],
+    account: ['Conta adicionada', `${description} · saldo ${amount}`],
+    card: ['Cartão adicionado', `${description} · limite ${amount}`],
+    goal: ['Meta atualizada', `${amount} · ${description}`],
+    scheduled: ['Conta prevista', `${amount} · ${description}`],
+    daily_limit: ['Limite diário atingido', `${amount} gastos hoje · ${description}`],
+    other: ['Finanças atualizadas', `${amount} · ${description}`],
+  };
+  return copies[event.type];
+}
+
+export async function notifyFinancialActivity(householdId: string, event: FinancialActivity) {
+  if (!useFinanceStore.getState().notificationsEnabled) return 0;
   try {
     const result = await pushRequest('/api/push/dispatch', { householdId, event });
-    return Number(result?.delivered ?? 0);
+    const delivered = Number(result?.delivered ?? 0);
+    if (delivered < 1) {
+      const [title, body] = activityCopy(event);
+      await showCurrentDeviceNotification(title, body, `saldo-${event.type}-${Date.now()}`);
+    }
+    return delivered;
   } catch {
+    const [title, body] = activityCopy(event);
+    await showCurrentDeviceNotification(title, body, `saldo-${event.type}-${Date.now()}`).catch(() => undefined);
     return 0;
+  }
+}
+
+async function showCurrentDeviceNotification(title: string, body: string, tag: string) {
+  const ExpoNotifications = nativeNotifications();
+  configureNotificationHandler();
+  const permission = await ExpoNotifications.getPermissionsAsync();
+  if (!permission.granted) return false;
+  await ExpoNotifications.scheduleNotificationAsync({ content: { title, body, sound: 'default', data: { route: '/', tag } }, trigger: null });
+  return true;
+}
+
+function reminderDaysUntil(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return Number.POSITIVE_INFINITY;
+  const now = new Date();
+  return Math.ceil((new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12).getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12).getTime()) / 86_400_000);
+}
+
+export async function syncFinanceReminders(input: { householdId: string; cards: CreditCard[]; upcoming: UpcomingExpense[]; transactions: Transaction[]; dailySpendLimitCents: number }) {
+  const reminders: Array<{ id: string; title: string; body: string }> = [];
+  for (const expense of input.upcoming) {
+    const days = reminderDaysUntil(expense.dueDate);
+    if (!expense.paid && days >= 0 && days <= 3) reminders.push({ id: `bill-${expense.id}-${days}`, title: days === 0 ? 'Conta vence hoje' : `Conta vence em ${days} dia${days === 1 ? '' : 's'}`, body: `${expense.title} · ${formatMoney(expense.amountCents)}` });
+  }
+  for (const card of input.cards) for (const invoice of card.invoices ?? []) {
+    const days = reminderDaysUntil(invoice.dueDate);
+    if (invoice.status !== 'paid' && days >= 0 && days <= 3) reminders.push({ id: `invoice-${invoice.id}-${days}`, title: days === 0 ? 'Fatura vence hoje' : `Fatura vence em ${days} dia${days === 1 ? '' : 's'}`, body: `${card.name} · ${formatMoney(invoice.amountCents)}` });
+  }
+  const spentToday = dailyExpenseTotal(input.transactions);
+  if (input.dailySpendLimitCents > 0 && spentToday > input.dailySpendLimitCents) reminders.push({ id: `daily-${new Date().toISOString().slice(0, 10)}`, title: 'Limite diário ultrapassado', body: `Gastos de ${formatMoney(spentToday)} excederam o limite em ${formatMoney(spentToday - input.dailySpendLimitCents)}.` });
+
+  for (const reminder of reminders) {
+    const key = `at-reminder:${input.householdId}:${reminder.id}`;
+    if (await AsyncStorage.getItem(key)) continue;
+    try {
+      const shown = await showCurrentDeviceNotification(reminder.title, reminder.body, reminder.id);
+      if (shown) await AsyncStorage.setItem(key, new Date().toISOString());
+    } catch {
+      // Alertas locais complementam os avisos visíveis da tela inicial.
+    }
   }
 }

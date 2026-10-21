@@ -2,7 +2,7 @@ create table if not exists push_subscriptions (
   id text primary key,
   household_id text not null,
   user_id text not null,
-  platform text not null check (platform in ('expo', 'web')),
+  platform text not null check (platform = 'expo'),
   subscription_key text not null,
   token text,
   endpoint text,

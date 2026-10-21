@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
-import { ArrowUp, Bot, Check, History, MessageSquareText, Plus, ShieldCheck, Sparkles, Trash2, Users, X } from 'lucide-react-native';
+import { ArrowUp, Bot, Check, History, MessageSquareText, Plus, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText, EmptyState, Pill } from '@/components/ui';
@@ -17,8 +17,8 @@ import { useAuth } from '@/providers/AuthProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
 import { useFinanceStore } from '@/store/useFinanceStore';
 
-const suggestions = ['Bom dia! Como estamos?', 'Investigue nossos gastos deste mês', 'Crie uma meta de R$ 1.000 até dia 30'];
-const welcome = 'Oi! Sou o assistente da família A&T. Posso conversar normalmente, investigar gastos, explicar os números e preparar alterações — mas só aplico qualquer mudança depois da autorização de vocês.';
+const suggestions = ['Analise meus gastos deste mês', 'Onde posso economizar sem me apertar?', 'Registre R$ 80 de renda do iFood'];
+const welcome = 'Oi, Alberto. Sou seu assistente financeiro. Posso conversar normalmente, investigar seu histórico, explicar números e preparar lançamentos — toda alteração continua dependendo da sua confirmação.';
 
 function conversationDate(value: string) {
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }).format(new Date(value));
@@ -42,11 +42,11 @@ export default function AssistantScreen() {
   const [chatNotice, setChatNotice] = useState('');
   const [applyingAction, setApplyingAction] = useState<string | null>(null);
   const [appliedActions, setAppliedActions] = useState(() => new Set<string>());
-  const shared = Boolean(supabase && finance.householdId && user && !user.demo);
+  const online = Boolean(supabase && finance.householdId && user && !user.demo);
   const activeConversation = conversations.find((item) => item.id === activeConversationId);
 
   useEffect(() => {
-    if (!shared || !finance.householdId) return;
+    if (!online || !finance.householdId) return;
     let active = true;
     void fetchAiConversations(finance.householdId).then((items) => {
       if (!active) return;
@@ -55,10 +55,10 @@ export default function AssistantScreen() {
       setChatNotice('');
     }).catch((reason) => { if (active) setChatNotice(reason instanceof Error ? reason.message : 'O histórico não pôde ser carregado.'); });
     return () => { active = false; };
-  }, [finance.householdId, shared, syncVersion]);
+  }, [finance.householdId, online, syncVersion]);
 
   useEffect(() => {
-    if (!shared || !activeConversationId) {
+    if (!online || !activeConversationId) {
       setMessages([]);
       return;
     }
@@ -66,17 +66,17 @@ export default function AssistantScreen() {
     setLoadingChat(true);
     void fetchAiMessages(activeConversationId).then((items) => { if (active) setMessages(items); }).catch((reason) => { if (active) setChatNotice(reason instanceof Error ? reason.message : 'As mensagens não puderam ser carregadas.'); }).finally(() => { if (active) setLoadingChat(false); });
     return () => { active = false; };
-  }, [activeConversationId, shared, syncVersion]);
+  }, [activeConversationId, online, syncVersion]);
 
   useEffect(() => {
-    if (!shared || !finance.householdId || !supabase) return;
+    if (!online || !finance.householdId || !supabase) return;
     const client = supabase;
     const channel = client.channel(`ai-chat:${finance.householdId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_conversations', filter: `household_id=eq.${finance.householdId}` }, () => setSyncVersion((value) => value + 1))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_messages', filter: `household_id=eq.${finance.householdId}` }, () => setSyncVersion((value) => value + 1))
       .subscribe();
     return () => { void client.removeChannel(channel); };
-  }, [finance.householdId, shared]);
+  }, [finance.householdId, online]);
 
   function localAnswer(input: string) {
     const normalized = input.toLocaleLowerCase('pt-BR');
@@ -85,19 +85,19 @@ export default function AssistantScreen() {
       const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
       return `${greeting}, ${user?.name ?? 'tudo bem'}! Estou por aqui. Podemos conversar normalmente ou olhar juntos os gastos, saldos, faturas, metas e próximos compromissos.`;
     }
-    if (/qual (?:é|e) (?:o )?seu nome|quem (?:é|e) voc[eê]|como voc[eê] se chama/u.test(normalized)) return 'Sou o Assistente da família A&T. Posso conversar normalmente com vocês e, quando pedirem, analisar os dados financeiros compartilhados ou preparar uma alteração para autorização.';
-    if (!finance.accounts.length && !finance.transactions.length && !finance.cards.length) return 'Ainda não há dados financeiros sincronizados para analisar. Mesmo assim, posso conversar e ajudar a planejar. Para uma análise real, cadastrem uma conta ou cartão e registrem a primeira movimentação.';
+    if (/qual (?:é|e) (?:o )?seu nome|quem (?:é|e) voc[eê]|como voc[eê] se chama/u.test(normalized)) return 'Sou o assistente do Saldo. Posso conversar, analisar seu histórico financeiro e preparar lançamentos para sua autorização.';
+    if (!finance.accounts.length && !finance.transactions.length && !finance.cards.length) return 'Ainda não há dados financeiros sincronizados para analisar. Mesmo assim, posso ajudar a planejar. Cadastre uma conta ou cartão e registre a primeira movimentação para liberar análises reais.';
     const flow = monthlyCashFlow(finance.transactions);
     const net = liquidPosition(finance.accounts, finance.cards, finance.debts);
-    if (normalized.includes('gast')) return `Neste mês, vocês registraram ${formatMoney(flow.expenseCents)} em gastos. Transferências entre as contas do casal ficaram fora desse total.`;
+    if (normalized.includes('gast')) return `Neste mês, você registrou ${formatMoney(flow.expenseCents)} em gastos. Transferências entre suas contas ficaram fora desse total.`;
     if (normalized.includes('líquid') || normalized.includes('positivo') || normalized.includes('dev')) return net >= 0 ? `A posição líquida está positiva em ${formatMoney(net)} depois de descontar faturas e dívidas externas registradas.` : `As faturas e dívidas externas superam o saldo atual em ${formatMoney(Math.abs(net))}.`;
     if (normalized.includes('dispon')) return `O patrimônio disponível agora é ${formatMoney(totalAvailable(finance.accounts))}. Esse valor mostra o caixa atual antes dos próximos compromissos.`;
     if (normalized.includes('compromet') || normalized.includes('sobr')) return `Depois das contas previstas e faturas, o saldo projetado é ${formatMoney(projectedAvailable(finance.accounts, finance.upcoming, finance.cards))}. As faturas abertas somam ${formatMoney(totalCardUsage(finance.cards))}.`;
-    return `Entendi. Com os dados disponíveis agora, vocês têm ${formatMoney(totalAvailable(finance.accounts))} em contas, ${formatMoney(totalCardUsage(finance.cards))} em faturas e posição líquida de ${formatMoney(net)}. Se quiser, diga “investigue nossos gastos” e eu organizo os principais pontos.`;
+    return `Entendi. Com os dados disponíveis agora, você tem ${formatMoney(totalAvailable(finance.accounts))} em contas, ${formatMoney(totalCardUsage(finance.cards))} em faturas e posição líquida de ${formatMoney(net)}. Se quiser, diga “investigue meus gastos” e eu organizo os principais pontos.`;
   }
 
   function requestAction(messageId: string, proposal: AssistantProposal) {
-    const title = proposal.kind === 'set_monthly_goal' ? 'Autorizar alteração da meta?' : 'Preparar este gasto?';
+    const title = proposal.kind === 'set_monthly_goal' ? 'Autorizar alteração da meta?' : proposal.kind === 'prepare_income' ? 'Preparar esta entrada?' : 'Preparar este gasto?';
     Alert.alert(title, proposal.summary, [
       { text: 'Cancelar', style: 'cancel' },
       { text: proposal.kind === 'set_monthly_goal' ? 'Autorizar e aplicar' : 'Autorizar e revisar', onPress: () => void applyAction(messageId, proposal) },
@@ -110,15 +110,17 @@ export default function AssistantScreen() {
     try {
       if (proposal.kind === 'prepare_expense') {
         router.push({ pathname: '/quick-expense', params: { amountCents: String(proposal.amountCents), description: proposal.description, category: proposal.category } });
+      } else if (proposal.kind === 'prepare_income') {
+        router.push({ pathname: '/quick-income', params: { amountCents: String(proposal.amountCents), description: proposal.description, category: proposal.category } } as never);
       } else if (user.demo) {
         useFinanceStore.getState().setMonthlyGoal({ id: `assistant-goal-${Date.now()}`, month: new Date().toISOString().slice(0, 7) + '-01', targetCents: proposal.amountCents, targetDay: proposal.targetDay, createdBy: user.id, updatedAt: new Date().toISOString() });
       } else {
-        if (!finance.householdId) throw new Error('A família ainda não terminou de sincronizar.');
+        if (!finance.householdId) throw new Error('Seu espaço financeiro ainda não terminou de sincronizar.');
         await saveOnlineMonthlyGoal({ householdId: finance.householdId, targetCents: proposal.amountCents, targetDay: proposal.targetDay });
         await finance.refresh();
       }
       setAppliedActions((current) => new Set(current).add(messageId));
-      setChatNotice(proposal.kind === 'prepare_expense' ? 'Gasto preparado. Confira a conta/cartão e toque em Salvar gasto.' : 'Meta alterada após sua autorização.');
+      setChatNotice(proposal.kind === 'prepare_expense' ? 'Gasto preparado. Confira a conta/cartão e salve.' : proposal.kind === 'prepare_income' ? 'Entrada preparada. Confira a conta e salve.' : 'Meta alterada após sua autorização.');
     } catch (reason) {
       Alert.alert('Alteração não aplicada', reason instanceof Error ? reason.message : 'Confira a conexão e tente novamente.');
     } finally {
@@ -144,7 +146,7 @@ export default function AssistantScreen() {
 
   function confirmDelete(conversation: AiConversation) {
     if (!finance.householdId) return;
-    Alert.alert('Apagar chat?', `“${conversation.title}” deixará de aparecer para Alberto e Thauane.`, [
+    Alert.alert('Apagar chat?', `“${conversation.title}” será removido do seu histórico.`, [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Apagar', style: 'destructive', onPress: () => void archiveAiConversation(finance.householdId!, conversation.id).then(() => { if (activeConversationId === conversation.id) startNewChat(); setSyncVersion((value) => value + 1); }).catch((reason) => Alert.alert('Não foi possível apagar', reason instanceof Error ? reason.message : 'Tente novamente.')) },
     ]);
@@ -159,7 +161,7 @@ export default function AssistantScreen() {
     const temporaryId = `temporary-${Date.now()}`;
     let conversationId = activeConversationId;
     try {
-      if (shared && finance.householdId) {
+      if (online && finance.householdId) {
         if (!conversationId) {
           const created = await createAiConversation(finance.householdId, user.id, clean);
           conversationId = created.id;
@@ -180,7 +182,7 @@ export default function AssistantScreen() {
         setMessages((items) => [...items, { id: temporaryId, conversationId: 'local', role: 'user', text: clean, createdBy: user.id, createdAt: now }, { id: `${temporaryId}-answer`, conversationId: 'local', role: 'assistant', text: localAnswer(clean), createdBy: user.id, createdAt: now }]);
       }
     } catch {
-      const fallback = `${localAnswer(clean)}\n\nA análise online não respondeu. Esta resposta local não entrou no histórico compartilhado.`;
+      const fallback = `${localAnswer(clean)}\n\nA análise online não respondeu. Esta resposta local não foi salva no histórico.`;
       setMessages((items) => [...items.filter((item) => item.id !== temporaryId), { id: temporaryId, conversationId: conversationId ?? 'local', role: 'user', text: clean, createdBy: user.id, createdAt: new Date().toISOString() }, { id: `${temporaryId}-answer`, conversationId: conversationId ?? 'local', role: 'assistant', text: fallback, createdBy: user.id, createdAt: new Date().toISOString() }]);
       setChatNotice('O Groq não respondeu; mostrei uma análise local sem fingir sincronização.');
     } finally {
@@ -190,10 +192,10 @@ export default function AssistantScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={[styles.screen, { backgroundColor: palette.ink, paddingTop: Math.max(insets.top, spacing.md) }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+    <KeyboardAvoidingView style={[styles.screen, { backgroundColor: palette.ink, paddingTop: Math.max(insets.top, spacing.md) }]} behavior="height" keyboardVerticalOffset={0}>
       <View style={styles.header}>
         <Pressable accessibilityRole="button" accessibilityLabel="Fechar assistente" onPress={() => router.back()} style={[styles.iconButton, { backgroundColor: palette.surface }]}><X size={20} color={palette.text} /></Pressable>
-        <View style={styles.heading}><AppText variant="section" numberOfLines={1}>{activeConversation?.title ?? 'Novo chat'}</AppText><View style={styles.private}><Users size={12} color={palette.mint} /><AppText variant="caption">compartilhado com a família</AppText></View></View>
+        <View style={styles.heading}><AppText variant="section" numberOfLines={1}>{activeConversation?.title ?? 'Novo chat'}</AppText><View style={styles.private}><ShieldCheck size={12} color={palette.mint} /><AppText variant="caption">pessoal e protegido</AppText></View></View>
         <View style={styles.headerActions}><Pressable accessibilityRole="button" accessibilityLabel="Histórico de chats" onPress={() => setHistoryOpen(true)} style={[styles.smallButton, { backgroundColor: palette.surface }]}><History size={18} color={palette.text} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel="Novo chat" onPress={startNewChat} style={[styles.smallButton, { backgroundColor: palette.mintDeep }]}><Plus size={19} color={palette.mint} /></Pressable></View>
       </View>
 
@@ -209,7 +211,7 @@ export default function AssistantScreen() {
       <View style={[styles.composer, { backgroundColor: palette.surface, paddingBottom: Math.max(insets.bottom, spacing.md) }]}><TextInput accessibilityLabel="Pergunta para o assistente" multiline maxLength={500} placeholder="Converse ou peça uma análise" placeholderTextColor={palette.textDim} selectionColor={palette.mint} value={question} onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 180)} onChangeText={setQuestion} style={[styles.input, { backgroundColor: palette.surfaceRaised, color: palette.text }]} /><Pressable accessibilityRole="button" accessibilityLabel="Enviar pergunta" disabled={!question.trim() || sending} onPress={() => void send()} style={[styles.send, { backgroundColor: palette.mint }, (!question.trim() || sending) && styles.sendDisabled]}><ArrowUp size={20} color={palette.ink} /></Pressable></View>
 
       <Modal visible={historyOpen} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setHistoryOpen(false)}>
-        <View style={styles.modalRoot}><Pressable accessibilityLabel="Fechar histórico" style={StyleSheet.absoluteFill} onPress={() => setHistoryOpen(false)} /><View style={[styles.sheet, { backgroundColor: palette.surface, paddingBottom: Math.max(insets.bottom, spacing.xl) }]}><View style={styles.sheetHeader}><View><AppText variant="title">Chats da família</AppText><AppText variant="caption">Visíveis para Alberto e Thauane</AppText></View><Pressable accessibilityRole="button" accessibilityLabel="Fechar histórico" onPress={() => setHistoryOpen(false)} style={[styles.smallButton, { backgroundColor: palette.surfaceRaised }]}><X size={18} color={palette.text} /></Pressable></View><Pressable accessibilityRole="button" onPress={startNewChat} style={[styles.newChat, { backgroundColor: palette.mintDeep }]}><Plus size={18} color={palette.mint} /><AppText variant="section" style={{ color: palette.mint }}>Novo chat</AppText></Pressable><ScrollView style={styles.historyList} contentContainerStyle={styles.historyContent}>{conversations.length ? conversations.map((conversation) => <Pressable key={conversation.id} accessibilityRole="button" onPress={() => openConversation(conversation.id)} style={[styles.historyRow, { backgroundColor: conversation.id === activeConversationId ? palette.surfaceRaised : 'transparent' }]}><View style={[styles.historyIcon, { backgroundColor: palette.skyDeep }]}><MessageSquareText size={17} color={palette.sky} /></View><View style={styles.historyCopy}><AppText variant="body" numberOfLines={1}>{conversation.title}</AppText><AppText variant="caption">{conversationDate(conversation.updatedAt)}</AppText></View><Pressable accessibilityRole="button" accessibilityLabel={`Apagar ${conversation.title}`} hitSlop={8} onPress={(event) => { event.stopPropagation(); confirmDelete(conversation); }} style={styles.trash}><Trash2 size={17} color={palette.danger} /></Pressable></Pressable>) : <EmptyState title="Nenhum chat salvo" description="A primeira pergunta criará um histórico compartilhado." />}</ScrollView></View></View>
+        <View style={styles.modalRoot}><Pressable accessibilityLabel="Fechar histórico" style={StyleSheet.absoluteFill} onPress={() => setHistoryOpen(false)} /><View style={[styles.sheet, { backgroundColor: palette.surface, paddingBottom: Math.max(insets.bottom, spacing.xl) }]}><View style={styles.sheetHeader}><View><AppText variant="title">Seus chats</AppText><AppText variant="caption">Histórico pessoal de Alberto</AppText></View><Pressable accessibilityRole="button" accessibilityLabel="Fechar histórico" onPress={() => setHistoryOpen(false)} style={[styles.smallButton, { backgroundColor: palette.surfaceRaised }]}><X size={18} color={palette.text} /></Pressable></View><Pressable accessibilityRole="button" onPress={startNewChat} style={[styles.newChat, { backgroundColor: palette.mintDeep }]}><Plus size={18} color={palette.mint} /><AppText variant="section" style={{ color: palette.mint }}>Novo chat</AppText></Pressable><ScrollView style={styles.historyList} contentContainerStyle={styles.historyContent}>{conversations.length ? conversations.map((conversation) => <Pressable key={conversation.id} accessibilityRole="button" onPress={() => openConversation(conversation.id)} style={[styles.historyRow, { backgroundColor: conversation.id === activeConversationId ? palette.surfaceRaised : 'transparent' }]}><View style={[styles.historyIcon, { backgroundColor: palette.skyDeep }]}><MessageSquareText size={17} color={palette.sky} /></View><View style={styles.historyCopy}><AppText variant="body" numberOfLines={1}>{conversation.title}</AppText><AppText variant="caption">{conversationDate(conversation.updatedAt)}</AppText></View><Pressable accessibilityRole="button" accessibilityLabel={`Apagar ${conversation.title}`} hitSlop={8} onPress={(event) => { event.stopPropagation(); confirmDelete(conversation); }} style={styles.trash}><Trash2 size={17} color={palette.danger} /></Pressable></Pressable>) : <EmptyState title="Nenhum chat salvo" description="Sua primeira pergunta criará um histórico pessoal." />}</ScrollView></View></View>
       </Modal>
     </KeyboardAvoidingView>
   );
@@ -219,6 +221,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink }, header: { minHeight: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, gap: spacing.sm }, iconButton: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }, heading: { flex: 1, alignItems: 'center', gap: 2 }, private: { flexDirection: 'row', alignItems: 'center', gap: 4 }, headerActions: { flexDirection: 'row', gap: spacing.xs }, smallButton: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   messages: { paddingHorizontal: spacing.xl, paddingVertical: spacing.xl, paddingBottom: spacing.xxl, gap: spacing.md, flexGrow: 1 }, botMark: { width: 46, height: 46, borderRadius: 15, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: spacing.md }, messageBlock: { gap: spacing.sm }, message: { maxWidth: '86%', borderRadius: radii.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md }, assistantMessage: { alignSelf: 'flex-start', borderBottomLeftRadius: 5 }, userMessage: { alignSelf: 'flex-end', borderBottomRightRadius: 5 }, suggestions: { gap: spacing.sm, marginTop: spacing.md }, suggestion: { minHeight: 48, borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: spacing.lg, justifyContent: 'center', alignSelf: 'flex-start' },
   actionCard: { alignSelf: 'flex-start', maxWidth: '92%', borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.md, padding: spacing.lg, gap: spacing.md }, actionHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm }, actionButton: { minHeight: 48, borderRadius: radii.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg }, actionPressed: { opacity: 0.8 },
-  notice: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xl, paddingVertical: spacing.xs }, noticeText: { flex: 1 }, disclaimer: { alignItems: 'center', paddingVertical: spacing.sm }, composer: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md }, input: { flex: 1, maxHeight: 120, minHeight: 48, borderRadius: radii.md, fontFamily: type.regular, fontSize: 15, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, textAlignVertical: 'top' }, send: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }, sendDisabled: { opacity: 0.4 },
+  notice: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xl, paddingVertical: spacing.xs }, noticeText: { flex: 1 }, disclaimer: { alignItems: 'center', paddingVertical: spacing.sm }, composer: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md }, input: { flex: 1, maxHeight: 120, minHeight: 48, borderRadius: radii.md, fontFamily: type.regular, fontSize: 16, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, textAlignVertical: 'top' }, send: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }, sendDisabled: { opacity: 0.4 },
   modalRoot: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.62)' }, sheet: { maxHeight: '78%', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: spacing.xl, paddingTop: spacing.xl, gap: spacing.lg }, sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.lg }, newChat: { minHeight: 50, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm }, historyList: { flexGrow: 0 }, historyContent: { gap: spacing.xs, paddingBottom: spacing.md }, historyRow: { minHeight: 66, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md }, historyIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, historyCopy: { flex: 1, gap: 2 }, trash: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
 });

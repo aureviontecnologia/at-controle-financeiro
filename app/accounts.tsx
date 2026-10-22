@@ -2,7 +2,8 @@ import * as Crypto from 'expo-crypto';
 import { router, type Href } from 'expo-router';
 import { Banknote, Check, Landmark, PiggyBank, Plus, Ticket, WalletCards, X } from 'lucide-react-native';
 import { useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, StyleSheet, TextInput, View } from 'react-native';
+import { MotionPressable as Pressable } from '@/components/MotionPressable';
 
 import { AppText, Divider, EmptyState, PrimaryButton, Screen, Surface } from '@/components/ui';
 import { SyncRetry } from '@/components/SyncRetry';

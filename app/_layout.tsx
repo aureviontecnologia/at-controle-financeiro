@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '@/constants/theme';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { AppProviders } from '@/providers/AppProviders';
 import { useAppTheme } from '@/providers/ThemeProvider';
 
@@ -54,6 +55,7 @@ export default function RootLayout() {
 
 function AppNavigator() {
   const { palette } = useAppTheme();
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     void Promise.all([
@@ -66,24 +68,24 @@ function AppNavigator() {
   return (
     <>
       <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.ink }, animation: 'fade' }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.ink }, animation: reducedMotion ? 'none' : 'fade' }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="reset-password" />
-        <Stack.Screen name="change-password" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="quick-expense" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="quick-income" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="accounts" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="account-details" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="cards" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="pay-card-statement" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="security" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="monthly-goal" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="daily-limit" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="scheduled-expense" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="future-income" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="confirm-ticket-reload" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="change-password" options={{ animation: reducedMotion ? 'none' : 'slide_from_right' }} />
+        <Stack.Screen name="quick-expense" options={{ presentation: 'modal', animation: reducedMotion ? 'none' : 'slide_from_bottom' }} />
+        <Stack.Screen name="quick-income" options={{ presentation: 'modal', animation: reducedMotion ? 'none' : 'slide_from_bottom' }} />
+        <Stack.Screen name="accounts" options={{ animation: reducedMotion ? 'none' : 'slide_from_right' }} />
+        <Stack.Screen name="account-details" options={{ animation: reducedMotion ? 'none' : 'slide_from_right' }} />
+        <Stack.Screen name="cards" options={{ animation: reducedMotion ? 'none' : 'slide_from_right' }} />
+        <Stack.Screen name="pay-card-statement" options={{ presentation: 'modal', animation: reducedMotion ? 'none' : 'slide_from_bottom' }} />
+        <Stack.Screen name="security" options={{ animation: reducedMotion ? 'none' : 'slide_from_right' }} />
+        <Stack.Screen name="monthly-goal" options={{ presentation: 'modal', animation: reducedMotion ? 'none' : 'slide_from_bottom' }} />
+        <Stack.Screen name="daily-limit" options={{ presentation: 'modal', animation: reducedMotion ? 'none' : 'slide_from_bottom' }} />
+        <Stack.Screen name="scheduled-expense" options={{ presentation: 'modal', animation: reducedMotion ? 'none' : 'slide_from_bottom' }} />
+        <Stack.Screen name="future-income" options={{ presentation: 'modal', animation: reducedMotion ? 'none' : 'slide_from_bottom' }} />
+        <Stack.Screen name="confirm-ticket-reload" options={{ presentation: 'modal', animation: reducedMotion ? 'none' : 'slide_from_bottom' }} />
       </Stack>
     </>
   );

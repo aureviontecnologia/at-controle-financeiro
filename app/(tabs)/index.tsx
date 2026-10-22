@@ -1,13 +1,15 @@
 import { router, type Href } from 'expo-router';
 import { ArrowDownLeft, ArrowRight, Bell, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, CircleDollarSign, CreditCard, Gauge, ReceiptText, Sparkles, Ticket, TriangleAlert } from 'lucide-react-native';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { MotionPressable as Pressable } from '@/components/MotionPressable';
+import { Reveal } from '@/components/Reveal';
 
 import { BalanceHero } from '@/components/BalanceHero';
 import { NetworkBanner } from '@/components/NetworkBanner';
 import { SyncRetry } from '@/components/SyncRetry';
 import { TransactionRow } from '@/components/TransactionRow';
-import { AppText, Divider, EmptyState, Pill, Screen, SectionHeader, Surface } from '@/components/ui';
+import { AppText, Divider, EmptyState, Pill, PrimaryButton, Screen, SectionHeader, Surface } from '@/components/ui';
 import { colors, radii, spacing } from '@/constants/theme';
 import { availableCardLimit, cardInvoicesForMonth, dailyExpenseTotal, financeMonthKey, futureIncomeOccurrencesForMonth, monthlyCashFlow, monthlySolvency, statementClosingDate, ticketReloadsDue, totalAvailable, totalSpendable, totalTicketBalance } from '@/lib/finance';
 import { formatCompactMoney, formatDate, formatMoney } from '@/lib/format';
@@ -63,8 +65,7 @@ export default function HomeScreen() {
   const nearDueInvoices = cards.flatMap((card) => (card.invoices ?? []).filter((item) => item.status !== 'paid' && daysUntil(item.dueDate) >= 0 && daysUntil(item.dueDate) <= 3).map((item) => ({ ...item, cardName: card.name })));
   const alertCount = nearDueExpenses.length + nearDueInvoices.length + (dailyExceeded ? 1 : 0);
   const leisure = budgets.find((item) => item.category.toLocaleLowerCase('pt-BR') === 'lazer');
-  const hour = Number(new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }).format(new Date()));
-  const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+  const hasRecords = accounts.length > 0 || cards.length > 0 || transactions.length > 0 || upcoming.length > 0 || futureIncomes.length > 0;
 
   if (isLoading) {
     return <Screen scroll={false} contentStyle={styles.loading}><AppText variant="label">SINCRONIZANDO</AppText><AppText variant="title">Organizando suas finanças…</AppText><Surface style={styles.loadingBlock} /><Surface style={styles.loadingBlockSmall} /></Screen>;
@@ -78,8 +79,8 @@ export default function HomeScreen() {
     <Screen>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
-          <AppText variant="label">{greeting.toUpperCase()}</AppText>
-          <AppText variant="title">{user?.name}, aqui está {monthLabel}.</AppText>
+          <AppText variant="label">SALDO · {user?.name?.toUpperCase()}</AppText>
+          <AppText variant="title">Visão geral</AppText>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel={`${alertCount} avisos`} onPress={() => setShowAlerts((value) => !value)} style={[styles.iconButton, { backgroundColor: palette.surface }]}><Bell size={20} color={palette.text} />{alertCount ? <View style={[styles.notificationDot, { backgroundColor: dailyExceeded ? palette.danger : palette.amber }]} /> : null}</Pressable>
       </View>
@@ -97,6 +98,7 @@ export default function HomeScreen() {
         <Pressable accessibilityRole="button" onPress={() => router.push('/quick-expense' as Href)} style={({ pressed }) => [styles.quickAction, { backgroundColor: pressed ? palette.surfacePressed : palette.surface, borderColor: palette.lineSoft }]}><View style={[styles.quickActionIcon, { backgroundColor: palette.surfaceRaised }]}><ReceiptText size={19} color={palette.text} /></View><View><AppText variant="section">Gasto</AppText><AppText variant="caption">Registrar uma saída</AppText></View></Pressable>
       </View>
 
+      {!hasRecords ? <Reveal><Surface style={styles.setup}><AppText variant="section">Configure seu controle financeiro</AppText><AppText variant="bodyMuted">Adicione uma conta para registrar saldos e movimentações. Você também pode cadastrar um cartão de crédito.</AppText><PrimaryButton label="Adicionar conta" onPress={() => router.push('/accounts')} /><Pressable accessibilityRole="button" onPress={() => router.push('/cards')} style={styles.setupSecondary}><CreditCard size={17} color={palette.mint} /><AppText variant="label" style={{ color: palette.mint }}>Adicionar cartão de crédito</AppText></Pressable></Surface></Reveal> : <>
       <View style={styles.metrics}>
         <Surface style={styles.metric}><ReceiptText size={18} color={palette.sky} /><AppText variant="caption">FATURAS DE {monthLabel.toUpperCase()}</AppText><AppText variant="mono">{formatMoney(cardTotal, hideValues)}</AppText></Surface>
         <Pressable accessibilityRole="button" onPress={() => router.push('/cards')} style={styles.metricPressable}><Surface style={styles.metric}><CreditCard size={18} color={palette.mint} /><AppText variant="caption">LIMITE DISPONÍVEL</AppText><AppText variant="mono">{formatMoney(cardAvailable, hideValues)}</AppText></Surface></Pressable>
@@ -110,14 +112,14 @@ export default function HomeScreen() {
       {dueTicketReloads.map((account) => <Pressable key={`reload-${account.id}`} accessibilityRole="button" onPress={() => router.push(`/confirm-ticket-reload?accountId=${encodeURIComponent(account.id)}` as Href)} style={({ pressed }) => [styles.ticketPrompt, { backgroundColor: palette.amberDeep, borderColor: palette.amber }, pressed && styles.insightPressed]}><View style={[styles.insightIcon, { backgroundColor: palette.surface }]}><Ticket size={19} color={palette.amber} /></View><View style={styles.insightCopy}><AppText variant="label">RECARGA PREVISTA PARA O DIA {account.expectedReloadDay}</AppText><AppText variant="body">O {account.name} recebeu {formatMoney(account.expectedReloadCents ?? 0)}?</AppText><AppText variant="caption">Confirme o valor previsto ou informe quanto entrou de verdade.</AppText></View><ArrowRight size={18} color={palette.amber} /></Pressable>)}
 
       <Surface style={styles.futureCard}>
-        <View style={styles.futureHead}><View style={[styles.insightIcon, { backgroundColor: solvency.canPayAllOnTime ? palette.mintDeep : palette.dangerDeep }]}>{solvency.canPayAllOnTime ? <CheckCircle2 size={20} color={palette.mint} /> : <TriangleAlert size={20} color={palette.danger} />}</View><View style={styles.futureTitle}><AppText variant="label">PREVISÃO DE {monthLabel.toUpperCase()}</AppText><AppText variant="section">{solvency.canPayAllOnTime ? 'Dá para pagar tudo até o vencimento' : 'Pode faltar saldo antes de um vencimento'}</AppText></View></View>
+        <View style={styles.futureHead}><View style={[styles.insightIcon, { backgroundColor: solvency.canPayAllOnTime ? palette.mintDeep : palette.dangerDeep }]}>{solvency.canPayAllOnTime ? <CheckCircle2 size={20} color={palette.mint} /> : <TriangleAlert size={20} color={palette.danger} />}</View><View style={styles.futureTitle}><AppText variant="label">PREVISÃO DE {monthLabel.toUpperCase()}</AppText><AppText variant="section">{solvency.canPayAllOnTime ? 'Vencimentos cobertos pelo saldo previsto' : 'Saldo previsto insuficiente para um vencimento'}</AppText></View></View>
         <View style={styles.futureBalance}><AppText variant="caption">SALDO PROJETADO</AppText><AppText variant="display" numberOfLines={1} style={[styles.projectedFutureValue, { color: projected >= 0 ? palette.mint : palette.danger }]}>{formatMoney(projected, hideValues)}</AppText></View>
         <Divider />
         <View style={styles.forecastRow}><AppText variant="bodyMuted" style={styles.forecastLabel}>Saldo atual</AppText><AppText variant="mono" style={styles.forecastValue}>{formatMoney(available, hideValues)}</AppText></View>
         <View style={styles.forecastRow}><AppText variant="bodyMuted" style={styles.forecastLabel}>Livre para vencimentos</AppText><AppText variant="mono" style={styles.forecastValue}>{formatMoney(spendable, hideValues)}</AppText></View>
         <View style={styles.forecastRow}><AppText variant="bodyMuted" style={styles.forecastLabel}>Salários e entradas previstas</AppText><AppText variant="mono" style={[styles.forecastValue, { color: palette.mint }]}>+{formatMoney(expectedCash, hideValues)}</AppText></View>
         <View style={styles.forecastRow}><AppText variant="bodyMuted" style={styles.forecastLabel}>Faturas e contas do mês</AppText><AppText variant="mono" style={styles.forecastValue}>−{formatMoney(cardTotal + regularUpcoming.reduce((sum, item) => sum + item.amountCents, 0), hideValues)}</AppText></View>
-        {solvency.firstShortfall ? <View style={[styles.solvencyWarning, { backgroundColor: palette.dangerDeep }]}><AppText variant="body" style={{ color: palette.danger }}>Faltariam {formatMoney(solvency.shortfallCents, hideValues)} antes de pagar “{solvency.firstShortfall.label}” em {formatDate(solvency.firstShortfall.date)}.</AppText></View> : <AppText variant="caption">A conferência respeita a data de cada salário, conta e fatura; não olha apenas a sobra no fim do mês.</AppText>}
+        {solvency.firstShortfall ? <View style={[styles.solvencyWarning, { backgroundColor: palette.dangerDeep }]}><AppText variant="body" style={{ color: palette.danger }}>Faltariam {formatMoney(solvency.shortfallCents, hideValues)} antes de pagar “{solvency.firstShortfall.label}” em {formatDate(solvency.firstShortfall.date)}.</AppText></View> : <AppText variant="caption">Projeção calculada pelas datas de entrada e vencimento cadastradas.</AppText>}
         {ticketAccounts.length ? <View style={[styles.ticketForecast, { borderColor: palette.lineSoft }]}><Ticket size={19} color={palette.amber} /><View style={styles.ticketForecastCopy}><AppText variant="label">TICKET PREVISTO · SEPARADO DO DINHEIRO</AppText><AppText variant="body">Saldo atual {formatMoney(ticketTotal, hideValues)}</AppText>{ticketAccounts.map((account) => <AppText key={`planned-${account.id}`} variant="caption">{account.name}: {formatMoney(account.expectedReloadCents ?? 0, hideValues)} prevista no dia {account.expectedReloadDay ?? '—'}</AppText>)}</View></View> : null}
         <Pressable accessibilityRole="button" onPress={() => router.push('/future-income' as Href)} style={({ pressed }) => [styles.addIncome, { backgroundColor: pressed ? palette.surfacePressed : palette.surfaceRaised }]}><CircleDollarSign size={18} color={palette.mint} /><AppText variant="button" style={{ color: palette.mint }}>Adicionar salário ou entrada prevista</AppText><ArrowRight size={17} color={palette.mint} /></Pressable>
       </Surface>
@@ -138,7 +140,7 @@ export default function HomeScreen() {
 
       <Pressable accessibilityRole="button" onPress={() => router.push('/assistant')} style={({ pressed }) => [styles.insight, { backgroundColor: pressed ? palette.surfacePressed : palette.surface }]}>
         <View style={[styles.insightIcon, { backgroundColor: palette.mintDeep }]}><Sparkles size={18} color={palette.mint} /></View>
-        <View style={styles.insightCopy}><Pill tone="mint">LEITURA DA IA</Pill><AppText variant="body">{leisure ? `Restam ${formatCompactMoney(Math.max(0, leisure.limitCents - leisure.spentCents), hideValues)} do orçamento de lazer.` : 'Abra o assistente para analisar os dados já registrados.'}</AppText><AppText variant="caption">Análise pessoal, sem julgamentos.</AppText></View>
+        <View style={styles.insightCopy}><AppText variant="section">Assistente financeiro</AppText><AppText variant="bodyMuted">{leisure ? `Disponível no orçamento de lazer: ${formatCompactMoney(Math.max(0, leisure.limitCents - leisure.spentCents), hideValues)}.` : 'Consulte seus registros e planeje as próximas decisões.'}</AppText></View>
         <ArrowRight size={18} color={colors.textMuted} />
       </Pressable>
 
@@ -160,7 +162,7 @@ export default function HomeScreen() {
           <View style={styles.summaryRow}><AppText variant="bodyMuted">Entradas</AppText><AppText variant="mono" style={styles.income}>{formatMoney(flow.incomeCents, hideValues)}</AppText></View>
           <View style={styles.summaryRow}><AppText variant="bodyMuted">Gastos</AppText><AppText variant="mono">{formatMoney(flow.expenseCents, hideValues)}</AppText></View>
           <Divider />
-          <View style={styles.summaryRow}><AppText variant="section">Sobra do mês</AppText><AppText variant="mono" style={{ color: flow.incomeCents - flow.expenseCents >= 0 ? palette.mint : palette.danger }}>{formatMoney(flow.incomeCents - flow.expenseCents, hideValues)}</AppText></View>
+          <View style={styles.summaryRow}><AppText variant="section">Resultado do mês</AppText><AppText variant="mono" style={{ color: flow.incomeCents - flow.expenseCents >= 0 ? palette.mint : palette.danger }}>{formatMoney(flow.incomeCents - flow.expenseCents, hideValues)}</AppText></View>
           <AppText variant="caption">Transferências entre suas contas não alteram este resultado.</AppText>
         </Surface>
       </View>
@@ -169,6 +171,7 @@ export default function HomeScreen() {
         <SectionHeader title="Últimas movimentações" action="Ver todas" onAction={() => router.push('/(tabs)/transactions')} />
         <Surface style={styles.listSurface}>{transactions.length ? transactions.slice(0, 4).map((item, index) => <View key={item.id}><TransactionRow item={item} hidden={hideValues} />{index < Math.min(transactions.length, 4) - 1 ? <Divider /> : null}</View>) : <EmptyState title="Nenhuma movimentação" description="Registre sua primeira entrada ou seu primeiro gasto." />}</Surface>
       </View>
+      </>}
     </Screen>
   );
 }
@@ -185,6 +188,8 @@ const styles = StyleSheet.create({
   alerts: { gap: spacing.sm },
   metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   quickActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  setup: { gap: spacing.lg },
+  setupSecondary: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   quickAction: { flexGrow: 1, flexBasis: 150, minHeight: 74, borderRadius: radii.md, borderWidth: StyleSheet.hairlineWidth, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   quickActionIcon: { width: 40, height: 40, borderRadius: radii.sm, alignItems: 'center', justifyContent: 'center' },
   metricPressable: { flexGrow: 1, flexBasis: 145 },

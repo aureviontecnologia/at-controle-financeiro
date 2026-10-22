@@ -1,6 +1,6 @@
 /* Hallmark · pre-emit critique: P5 H4 E4 S5 R5 V4 */
 
-# Design — Saldo.
+# Design — Saldo
 
 ## Direção
 
@@ -8,11 +8,13 @@ Aplicativo financeiro pessoal do Alberto. A interface deve parecer uma ferrament
 
 ## Identidade
 
-- Nome: **Saldo.**
+- Nome: **Saldo**
 - Marca: um único traço em forma de “S”, branco sobre preto mineral.
-- Cor funcional: verde suave apenas para ações, entradas e estados positivos.
+- Paleta: grafite `#0C1117`, superfícies `#141B23`, texto `#EDF1F5`, cinza `#A0ADBB` e azul-aço `#B5CADD`. Vermelho e âmbar ficam restritos a situações financeiras relevantes.
+- Tipografia: Figtree para títulos e leitura; valores tabulares com o mesmo desenho, sem o excesso de largura de uma fonte monoespaçada.
+- Ícone adaptativo: marca opticamente centralizada, contida no círculo seguro de 66 dp de uma camada Android de 108 dp. Sem moldura embutida.
 - Superfícies planas, contorno fino, cantos moderados e números tabulares.
-- Animações curtas de 160–240 ms, sempre respeitando movimento reduzido.
+- Animações: pressão de 100–160 ms, entrada de conteúdo de 200 ms e transições curtas, sem saltos, respeitando movimento reduzido.
 
 ## Estrutura
 

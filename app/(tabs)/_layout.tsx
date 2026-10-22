@@ -1,18 +1,21 @@
 import { Redirect, Tabs, useRouter, type ErrorBoundaryProps } from 'expo-router';
 import { Bot, Home, MoreHorizontal, Plus, ReceiptText } from 'lucide-react-native';
 import { useCallback, useEffect, useRef } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { MotionPressable as Pressable } from '@/components/MotionPressable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, radii, spacing, type } from '@/constants/theme';
 import { RouteErrorFallback } from '@/components/RouteErrorFallback';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppTheme } from '@/providers/ThemeProvider';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 export default function TabLayout() {
   const router = useRouter();
   const { user } = useAuth();
   const { palette } = useAppTheme();
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const quickRouteLocked = useRef(false);
   const quickRouteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -40,6 +43,7 @@ export default function TabLayout() {
         tabBarStyle: [styles.bar, { backgroundColor: `${palette.surface}FA`, height: 66 + Math.max(insets.bottom, spacing.sm), paddingBottom: Math.max(insets.bottom, spacing.sm), borderTopColor: palette.lineSoft }],
         tabBarItemStyle: styles.item,
         tabBarHideOnKeyboard: true,
+        animation: reducedMotion ? 'none' : 'fade',
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Início', tabBarIcon: ({ color }) => <Home size={21} color={color} /> }} />
@@ -55,7 +59,7 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen name="ai" options={{ title: 'IA', tabBarIcon: ({ color }) => <Bot size={21} color={color} /> }} />
+      <Tabs.Screen name="ai" options={{ title: 'Assistente', tabBarIcon: ({ color }) => <Bot size={21} color={color} /> }} />
       <Tabs.Screen name="planning" options={{ href: null }} />
       <Tabs.Screen name="more" options={{ title: 'Mais', tabBarIcon: ({ color }) => <MoreHorizontal size={22} color={color} /> }} />
     </Tabs>

@@ -3,8 +3,6 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
-  Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   type TextStyle,
@@ -16,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radii, spacing, type } from '@/constants/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useAppTheme } from '@/providers/ThemeProvider';
+import { MotionPressable as Pressable } from './MotionPressable';
 
 export function Screen({ children, scroll = true, contentStyle }: { children: ReactNode; scroll?: boolean; contentStyle?: ViewStyle }) {
   const { palette } = useAppTheme();
@@ -86,26 +85,16 @@ export function Pill({ children, tone = 'neutral' }: { children: ReactNode; tone
 
 export function PrimaryButton({ label, onPress, loading = false, disabled = false, icon }: { label: string; onPress: () => void; loading?: boolean; disabled?: boolean; icon?: ReactNode }) {
   const { palette } = useAppTheme();
-  const reducedMotion = useReducedMotion();
-  const scale = useRef(new Animated.Value(1)).current;
-  const animateScale = (toValue: number) => {
-    if (reducedMotion) return;
-    Animated.timing(scale, { toValue, duration: toValue < 1 ? 100 : 130, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-  };
   return (
-    <Animated.View style={{ transform: [{ scale }] }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={label}
         disabled={disabled || loading}
         onPress={onPress}
-        onPressIn={() => animateScale(0.98)}
-        onPressOut={() => animateScale(1)}
         style={({ pressed }) => [styles.primaryButton, { backgroundColor: pressed ? palette.sky : palette.mint }, (disabled || loading) && styles.disabled]}
       >
         {loading ? <ActivityIndicator color={palette.ink} /> : <>{icon}<AppText variant="button" style={[styles.primaryLabel, { color: palette.ink }]}>{label}</AppText></>}
       </Pressable>
-    </Animated.View>
   );
 }
 
@@ -132,7 +121,7 @@ const textStyles = StyleSheet.create({
   label: { color: colors.textMuted, fontFamily: type.medium, fontSize: 13, lineHeight: 18 },
   caption: { color: colors.textMuted, fontFamily: type.medium, fontSize: 11, lineHeight: 15, letterSpacing: 0.15 },
   button: { color: colors.ink, fontFamily: type.semibold, fontSize: 15, lineHeight: 20 },
-  mono: { color: colors.text, fontFamily: type.mono, fontSize: 15, lineHeight: 21, fontVariant: ['tabular-nums'] },
+  mono: { color: colors.text, fontFamily: type.semibold, fontSize: 15, lineHeight: 21, fontVariant: ['tabular-nums'] },
 });
 
 const toneStyles = StyleSheet.create({
@@ -157,7 +146,7 @@ const styles = StyleSheet.create({
   sectionTitle: { flex: 1, minWidth: 0 },
   action: { color: colors.mint },
   surface: { backgroundColor: colors.surface, borderRadius: radii.lg, borderWidth: StyleSheet.hairlineWidth, padding: spacing.lg },
-  pill: { alignSelf: 'flex-start', borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 6 },
+  pill: { alignSelf: 'flex-start', borderRadius: radii.sm, paddingHorizontal: 9, paddingVertical: 5 },
   primaryButton: { minHeight: 54, borderRadius: radii.md, backgroundColor: colors.mint, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg },
   primaryPressed: { backgroundColor: '#92E9C2', transform: [{ scale: 0.99 }] },
   primaryLabel: { color: colors.ink },

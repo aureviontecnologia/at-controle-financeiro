@@ -1,6 +1,7 @@
 import { CalendarDays, CircleDollarSign, Landmark, Target } from 'lucide-react-native';
 import { router, type Href } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { MotionPressable as Pressable } from '@/components/MotionPressable';
 
 import { AppText, Divider, EmptyState, Pill, PrimaryButton, Screen, SectionHeader, Surface } from '@/components/ui';
 import { colors, radii, spacing } from '@/constants/theme';

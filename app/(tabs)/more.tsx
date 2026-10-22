@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 import { Bell, CalendarRange, ChevronRight, CreditCard, DatabaseBackup, Download, EyeOff, Landmark, LockKeyhole, LogOut, RefreshCw, RotateCcw, ShieldCheck } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Switch, View } from 'react-native';
+import { MotionPressable as Pressable } from '@/components/MotionPressable';
 
 import { AppText, Divider, Pill, Screen, SectionHeader, Surface } from '@/components/ui';
 import { BrandMark } from '@/components/BrandMark';
@@ -79,7 +80,7 @@ export default function MoreScreen() {
 
   return (
     <Screen>
-      <View style={styles.heading}><View style={styles.wordmark}><BrandMark size={22} /><AppText variant="section">Saldo.</AppText></View><AppText variant="title">Mais</AppText></View>
+      <View style={styles.heading}><View style={styles.wordmark}><BrandMark size={22} /><AppText variant="section">Saldo</AppText></View><AppText variant="title">Configurações</AppText></View>
       <Surface style={styles.profile}>
         <View style={[styles.avatar, { backgroundColor: palette.mintDeep }]}><AppText variant="section" style={[styles.avatarText, { color: palette.mint }]}>{displayName.slice(0, 2).toUpperCase()}</AppText></View>
         <View style={styles.profileCopy}><AppText variant="section">{displayName}</AppText><AppText variant="caption">Controle financeiro pessoal</AppText></View>
@@ -87,7 +88,7 @@ export default function MoreScreen() {
       </Surface>
 
       <View style={styles.section}>
-        <SectionHeader title="Seu dinheiro" />
+        <SectionHeader title="Gestão financeira" />
         <Surface style={styles.menu}>
           <MenuRow icon={<Landmark size={19} color={palette.mint} />} label="Contas e dinheiro" description={`${formatMoney(totalAvailable(finance.accounts), local.hideValues)} disponíveis · Ticket separado: ${formatMoney(totalTicketBalance(finance.accounts), local.hideValues)}`} onPress={() => router.push('/accounts')} />
           <Divider />
@@ -121,7 +122,7 @@ export default function MoreScreen() {
           <MenuRow icon={<DatabaseBackup size={19} color={palette.mint} />} label="Exportar backup em JSON" onPress={() => void exportData('json')} />
           {user?.demo ? <><Divider /><MenuRow icon={<RotateCcw size={19} color={palette.amber} />} label="Restaurar dados de demonstração" onPress={() => Alert.alert('Restaurar demonstração?', 'Os lançamentos locais adicionados serão substituídos pelos dados fictícios iniciais.', [{ text: 'Cancelar', style: 'cancel' }, { text: 'Restaurar', style: 'destructive', onPress: local.resetDemo }])} /></> : null}
         </Surface>
-        <View style={styles.securityNote}><ShieldCheck size={17} color={palette.mint} /><AppText variant="caption" style={styles.securityText}>{configured ? 'Dados online protegidos por RLS e auditoria.' : 'Modo local: nenhum dado financeiro foi enviado à nuvem.'}</AppText></View>
+        <View style={styles.securityNote}><ShieldCheck size={17} color={palette.mint} /><AppText variant="caption" style={styles.securityText}>{configured ? 'Acesso pessoal. Alterações sincronizadas com sua conta.' : 'Modo de demonstração. Dados armazenados neste aparelho.'}</AppText></View>
       </View>
 
       <Pressable accessibilityRole="button" onPress={() => Alert.alert('Sair do Saldo?', 'A sessão deste aparelho será encerrada.', [{ text: 'Cancelar', style: 'cancel' }, { text: 'Sair', style: 'destructive', onPress: () => void signOut() }])} style={({ pressed }) => [styles.logout, { backgroundColor: palette.dangerDeep }, pressed && styles.pressed]}><LogOut size={19} color={palette.danger} /><AppText variant="body" style={[styles.logoutText, { color: palette.danger }]}>Sair deste aparelho</AppText></Pressable>

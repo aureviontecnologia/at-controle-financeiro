@@ -1,23 +1,23 @@
 import { Platform } from 'react-native';
 
 export const colors = {
-  ink: '#090B0C',
-  surface: '#111416',
-  surfaceRaised: '#171B1D',
-  surfacePressed: '#1D2225',
-  line: '#2B3134',
-  lineSoft: '#202528',
-  text: '#F5F7F6',
-  textMuted: '#9AA29F',
-  textDim: '#68716D',
-  mint: '#8BE3B6',
-  mintDeep: '#153429',
-  sky: '#B7C9C0',
-  skyDeep: '#202B26',
-  amber: '#D8BD86',
-  amberDeep: '#31291B',
-  danger: '#FF9696',
-  dangerDeep: '#392022',
+  ink: '#0C1117',
+  surface: '#141B23',
+  surfaceRaised: '#1B2530',
+  surfacePressed: '#24313F',
+  line: '#344150',
+  lineSoft: '#27323E',
+  text: '#EDF1F5',
+  textMuted: '#A0ADBB',
+  textDim: '#82909F',
+  mint: '#B5CADD',
+  mintDeep: '#233343',
+  sky: '#B5CADD',
+  skyDeep: '#233343',
+  amber: '#D0BA91',
+  amberDeep: '#302C24',
+  danger: '#EBA0A2',
+  dangerDeep: '#352529',
   white: '#FFFFFF',
 } as const;
 
@@ -35,8 +35,8 @@ export const spacing = {
 
 export const radii = {
   sm: 8,
-  md: 12,
-  lg: 16,
+  md: 10,
+  lg: 14,
   pill: 999,
 } as const;
 

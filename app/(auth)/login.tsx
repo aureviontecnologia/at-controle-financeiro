@@ -93,8 +93,8 @@ export default function LoginScreen() {
       <Screen contentStyle={styles.content}>
         <View style={styles.brand}>
           <View style={styles.mark}><BrandMark size={38} /></View>
-          <AppText variant="title">Saldo.</AppText>
-          <AppText variant="bodyMuted" style={styles.subtitle}>Seu dinheiro, sem ruído.</AppText>
+          <AppText variant="title">Saldo</AppText>
+          <AppText variant="bodyMuted" style={styles.subtitle}>Controle financeiro pessoal</AppText>
         </View>
 
         <View style={styles.form}>

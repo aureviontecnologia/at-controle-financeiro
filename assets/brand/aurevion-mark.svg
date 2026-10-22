@@ -1,4 +1,6 @@
-<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1024" height="1024" rx="220" fill="#090B0C"/>
-  <path d="M760 266H404C294 266 238 328 238 408S294 550 404 550H620C730 550 786 612 786 692S730 834 620 834H264" stroke="#F5F7F6" stroke-width="82" stroke-linecap="round" stroke-linejoin="round"/>
+<svg width="1024" height="1024" viewBox="0 0 108 108" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="108" height="108" fill="#0C1117"/>
+  <g transform="translate(54 54) scale(2.2) translate(-24 -24)">
+    <path d="M31 13H22a5.5 5.5 0 0 0 0 11h4a5.5 5.5 0 0 1 0 11H17" stroke="#EDF1F5" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
 </svg>

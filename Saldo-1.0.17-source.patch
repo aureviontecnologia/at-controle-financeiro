@@ -1,0 +1,74 @@
+diff --git a/app.json b/app.json
+index 4fd15fe4e8d79915f41a6343768836e8c4ff0508..77216dbc83b6dee61762ac59c640a235cf910eb0 100644
+--- a/app.json
++++ b/app.json
+@@ -4,7 +4,7 @@
+     "name": "Saldo",
+     "slug": "aurevion",
+     "owner": "aurevion",
+-    "version": "1.0.16",
++    "version": "1.0.17",
+     "orientation": "portrait",
+     "icon": "./assets/images/icon.png",
+     "scheme": "aurevion",
+@@ -20,7 +20,7 @@
+       "allowBackup": false,
+       "package": "com.aurevion.financas",
+       "googleServicesFile": "./google-services.json",
+-      "versionCode": 1000016,
++      "versionCode": 1000017,
+       "permissions": [
+         "android.permission.REQUEST_INSTALL_PACKAGES"
+       ]
+diff --git a/components/MotionPressable.tsx b/components/MotionPressable.tsx
+index 5570195349809dcff97528ae1bc0658dd31a4fde..4bcf315459ece859894b3c261ac0a60c93267c9c 100644
+--- a/components/MotionPressable.tsx
++++ b/components/MotionPressable.tsx
+@@ -27,6 +27,7 @@ export function MotionPressable({ style, onPressIn, onPressOut, onHoverIn, onHov
+       reduceMotion: ReduceMotion.System,
+     });
+   };
++  const pressState = { pressed, hovered };
+ 
+   return <AnimatedPressable
+     {...props}
+@@ -35,6 +36,6 @@ export function MotionPressable({ style, onPressIn, onPressOut, onHoverIn, onHov
+     onPressOut={(event) => { setPressed(false); feedback(1); onPressOut?.(event); }}
+     onHoverIn={(event) => { setHovered(true); onHoverIn?.(event); }}
+     onHoverOut={(event) => { setHovered(false); onHoverOut?.(event); }}
+-    style={[typeof style === 'function' ? style({ pressed, hovered }) : style, animatedStyle]}
++    style={[typeof style === 'function' ? style(pressState) : style, animatedStyle]}
+   />;
+ }
+diff --git a/package-lock.json b/package-lock.json
+index 07b843790d6b84cb1983278cb533bc3b2af7e9d7..b67a066788e6624a3df881299b923de4c58f18be 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "aurevion",
+-  "version": "1.0.16",
++  "version": "1.0.17",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "aurevion",
+-      "version": "1.0.16",
++      "version": "1.0.17",
+       "dependencies": {
+         "@expo-google-fonts/figtree": "^0.4.1",
+         "@expo-google-fonts/ibm-plex-mono": "^0.4.1",
+diff --git a/package.json b/package.json
+index 89da6cfaf02b390057bce2e7b61442f05cc81905..9311181af306593dc251a0494be3b27921a66220 100644
+--- a/package.json
++++ b/package.json
+@@ -1,7 +1,7 @@
+ {
+   "name": "aurevion",
+   "main": "expo-router/entry",
+-  "version": "1.0.16",
++  "version": "1.0.17",
+   "dependencies": {
+     "@expo-google-fonts/figtree": "^0.4.1",
+     "@expo-google-fonts/ibm-plex-mono": "^0.4.1",

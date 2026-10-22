@@ -10,11 +10,6 @@ on:
         description: 'Tag existente para gerar (ex.: v1.0.6)'
         required: true
         type: string
-      import_saldo_source:
-        description: 'Importar pacote revisado da versão 1.0.17'
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: write
@@ -39,23 +34,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.import_saldo_source && 'main' || inputs.release_tag || github.ref }}
-
-      - name: Importar código revisado pelo navegador
-        if: inputs.import_saldo_source
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "${{ inputs.release_tag }}" = 'v1.0.17'
-          printf '%s\n' '4daeeb9ce7f501a6e5e016ed1eb51455a3a900abec3c500561e6f4956b60c4a3  Saldo-1.0.17-source.patch' | sha256sum --check
-          git apply --check Saldo-1.0.17-source.patch
-          git apply --index Saldo-1.0.17-source.patch
-          git rm Saldo-1.0.17-source.patch
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'fix: compatibilidade nativa de animações Saldo 1.0.17'
-          git tag v1.0.17
-          git push --atomic origin HEAD:main refs/tags/v1.0.17
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - uses: actions/setup-node@v4
         with:

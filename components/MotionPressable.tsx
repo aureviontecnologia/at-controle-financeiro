@@ -27,6 +27,7 @@ export function MotionPressable({ style, onPressIn, onPressOut, onHoverIn, onHov
       reduceMotion: ReduceMotion.System,
     });
   };
+  const pressState = { pressed, hovered };
 
   return <AnimatedPressable
     {...props}
@@ -35,6 +36,6 @@ export function MotionPressable({ style, onPressIn, onPressOut, onHoverIn, onHov
     onPressOut={(event) => { setPressed(false); feedback(1); onPressOut?.(event); }}
     onHoverIn={(event) => { setHovered(true); onHoverIn?.(event); }}
     onHoverOut={(event) => { setHovered(false); onHoverOut?.(event); }}
-    style={[typeof style === 'function' ? style({ pressed, hovered }) : style, animatedStyle]}
+    style={[typeof style === 'function' ? style(pressState) : style, animatedStyle]}
   />;
 }

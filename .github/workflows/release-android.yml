@@ -10,6 +10,11 @@ on:
         description: 'Tag existente para gerar (ex.: v1.0.6)'
         required: true
         type: string
+      import_saldo_source:
+        description: 'Importar pacote revisado da versão 1.0.16'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -34,7 +39,23 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.release_tag || github.ref }}
+          ref: ${{ inputs.import_saldo_source && 'main' || inputs.release_tag || github.ref }}
+
+      - name: Importar código revisado pelo navegador
+        if: inputs.import_saldo_source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.release_tag }}" = 'v1.0.16'
+          printf '%s\n' '614d778e6d1df8489e79b4473b9b37e66664bd180cf627575b1473f6255daa20  Saldo-1.0.16-source.patch' | sha256sum --check
+          git apply --check Saldo-1.0.16-source.patch
+          git apply --index Saldo-1.0.16-source.patch
+          git rm Saldo-1.0.16-source.patch
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: publicar Saldo 1.0.16 com visual sóbrio e ícone adaptativo'
+          git tag v1.0.16
+          git push --atomic origin HEAD:main refs/tags/v1.0.16
 
       - uses: actions/setup-node@v4
         with:
